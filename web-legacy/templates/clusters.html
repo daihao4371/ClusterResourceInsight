@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.title}}</title>
+    <link href="/static/css/style.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- 导航栏 -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h1>K8s 多集群资源监控系统</h1>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link">资源监控</a>
+                <a href="/clusters" class="nav-link active">集群管理</a>
+            </div>
+        </nav>
+
+        <header>
+            <div class="page-header">
+                <h2>集群管理</h2>
+                <div class="header-actions">
+                    <button id="add-cluster-btn" class="btn btn-primary">
+                        <span class="icon">+</span>
+                        添加集群
+                    </button>
+                    <button id="test-all-btn" class="btn btn-secondary">
+                        <span class="icon">🔄</span>
+                        批量测试
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <!-- 集群列表加载中状态 -->
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>正在加载集群列表...</p>
+            </div>
+
+            <!-- 集群列表 -->
+            <div class="clusters-container" id="clusters-container" style="display: none;">
+                <div class="clusters-summary" id="clusters-summary">
+                    <div class="summary-item">
+                        <span class="label">总集群数:</span>
+                        <span class="value" id="total-clusters">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">在线集群:</span>
+                        <span class="value" id="online-clusters">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">离线集群:</span>
+                        <span class="value" id="offline-clusters">0</span>
+                    </div>
+                </div>
+
+                <div class="clusters-grid" id="clusters-grid">
+                    <!-- 集群卡片将在这里动态生成 -->
+                </div>
+            </div>
+
+            <!-- 错误状态 -->
+            <div class="error" id="error-container" style="display: none;">
+                <h3>错误信息</h3>
+                <p id="error-message"></p>
+                <button id="retry-btn" class="btn btn-primary">重试</button>
+            </div>
+        </main>
+    </div>
+
+    <!-- 添加/编辑集群模态框 -->
+    <div class="modal" id="cluster-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">添加集群</h3>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <form id="cluster-form" class="modal-body">
+                <div class="form-group">
+                    <label for="cluster-name">集群名称 *</label>
+                    <input type="text" id="cluster-name" name="cluster_name" required 
+                           placeholder="例如: production-cluster">
+                </div>
+                
+                <div class="form-group">
+                    <label for="cluster-alias">集群别名</label>
+                    <input type="text" id="cluster-alias" name="cluster_alias" 
+                           placeholder="例如: 生产环境">
+                </div>
+                
+                <div class="form-group">
+                    <label for="api-server">API Server 地址 *</label>
+                    <input type="url" id="api-server" name="api_server" required 
+                           placeholder="https://k8s-api.example.com:6443">
+                </div>
+                
+                <div class="form-group">
+                    <label for="auth-type">认证方式 *</label>
+                    <select id="auth-type" name="auth_type" required>
+                        <option value="">请选择认证方式</option>
+                        <option value="token">Bearer Token</option>
+                        <option value="cert">客户端证书</option>
+                        <option value="kubeconfig">Kubeconfig</option>
+                    </select>
+                </div>
+                
+                <!-- Token 认证配置 -->
+                <div class="auth-config" id="token-config" style="display: none;">
+                    <div class="form-group">
+                        <label for="bearer-token">Bearer Token *</label>
+                        <textarea id="bearer-token" name="bearer_token" rows="3" 
+                                  placeholder="请输入 Bearer Token"></textarea>
+                    </div>
+                </div>
+                
+                <!-- 证书认证配置 -->
+                <div class="auth-config" id="cert-config" style="display: none;">
+                    <div class="form-group">
+                        <label for="client-cert">客户端证书 *</label>
+                        <textarea id="client-cert" name="client_cert" rows="5" 
+                                  placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="client-key">客户端私钥 *</label>
+                        <textarea id="client-key" name="client_key" rows="5" 
+                                  placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="ca-cert">CA 证书</label>
+                        <textarea id="ca-cert" name="ca_cert" rows="5" 
+                                  placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+                    </div>
+                </div>
+                
+                <!-- Kubeconfig 认证配置 -->
+                <div class="auth-config" id="kubeconfig-config" style="display: none;">
+                    <div class="form-group">
+                        <label for="kubeconfig">Kubeconfig 内容 *</label>
+                        <textarea id="kubeconfig" name="kubeconfig" rows="8" 
+                                  placeholder="apiVersion: v1&#10;kind: Config&#10;..."></textarea>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="tags">标签 (可选)</label>
+                    <input type="text" id="tags" name="tags" 
+                           placeholder="production,asia (逗号分隔)">
+                </div>
+                
+                <div class="form-group">
+                    <label for="collect-interval">采集间隔 (分钟)</label>
+                    <input type="number" id="collect-interval" name="collect_interval" 
+                           value="30" min="1" max="1440">
+                </div>
+            </form>
+            <div class="modal-footer">
+                <button type="button" id="test-connection-btn" class="btn btn-secondary">测试连接</button>
+                <button type="button" id="cancel-btn" class="btn btn-outline">取消</button>
+                <button type="submit" form="cluster-form" id="save-btn" class="btn btn-primary">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 确认删除模态框 -->
+    <div class="modal" id="delete-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>确认删除</h3>
+                <button class="modal-close" id="delete-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>确定要删除集群 "<span id="delete-cluster-name"></span>" 吗？</p>
+                <p class="warning">此操作无法撤销，相关的历史数据也将被删除。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="cancel-delete-btn" class="btn btn-outline">取消</button>
+                <button type="button" id="confirm-delete-btn" class="btn btn-danger">确认删除</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/clusters.js"></script>
+</body>
+</html>

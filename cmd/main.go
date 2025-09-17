@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"cluster-resource-insight/internal/api"
 	"cluster-resource-insight/internal/collector"
@@ -18,23 +19,23 @@ import (
 // checkAndAutoMigrate 检查数据库表是否存在，如果不存在则自动执行迁移
 func checkAndAutoMigrate() error {
 	db := database.GetDB()
-	
+
 	// 检查关键表是否存在
 	log.Println("正在检查数据库表是否存在...")
 	if !db.Migrator().HasTable(&models.ClusterConfig{}) {
 		log.Println("检测到数据库表不存在，正在自动执行迁移...")
 		if err := database.MigrateDatabase(); err != nil {
-			return fmt.Errorf("自动迁移失败: %v\n\n" +
-				"请手动执行以下命令来创建数据库表:\n" +
-				"  ./bin/cluster-resource-insight --migrate\n" +
-				"或者:\n" +
+			return fmt.Errorf("自动迁移失败: %v\n\n"+
+				"请手动执行以下命令来创建数据库表:\n"+
+				"  ./bin/cluster-resource-insight --migrate\n"+
+				"或者:\n"+
 				"  go run cmd/main.go --migrate", err)
 		}
 		log.Println("数据库表自动创建完成")
 	} else {
 		log.Println("数据库表已存在，跳过迁移")
 	}
-	
+
 	return nil
 }
 
@@ -94,28 +95,55 @@ func main() {
 
 	// 设置路由
 	r := gin.Default()
-	
-	// 静态文件服务
-	r.Static("/static", "./web/static")
-	r.LoadHTMLGlob("web/templates/*")
 
-	// API 路由
-	apiGroup := r.Group("/api/v1")
+	// API 路由 - 先设置API路由，避免被静态文件路由覆盖
+	apiGroup := r.Group("/api")
 	api.SetupRoutes(apiGroup, resourceCollector)
 
-	// 首页路由
-	r.GET("/", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "index.html", gin.H{
-			"title": "K8s 多集群资源监控系统",
-		})
-	})
+	// 添加v1兼容路由
+	v1ApiGroup := r.Group("/api/v1")
+	api.SetupRoutes(v1ApiGroup, resourceCollector)
 
-	// 集群管理页面路由
-	r.GET("/clusters", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "clusters.html", gin.H{
-			"title": "集群管理",
+	// 静态文件服务配置
+	// 首先检查是否存在构建后的dist目录
+	if _, err := http.Dir("./web/dist").Open("/"); err != nil {
+		// 如果没有dist目录，说明是开发模式，使用web-legacy作为备用
+		log.Println("未找到Vue.js构建文件，使用传统web页面作为备用")
+		r.Static("/static", "./web-legacy/static")
+		r.LoadHTMLGlob("web-legacy/templates/*")
+
+		// 传统模式的路由
+		r.GET("/", func(c *gin.Context) {
+			c.HTML(http.StatusOK, "index.html", gin.H{
+				"title": "K8s 多集群资源监控系统",
+			})
 		})
-	})
+
+		r.GET("/clusters", func(c *gin.Context) {
+			c.HTML(http.StatusOK, "clusters.html", gin.H{
+				"title": "集群管理",
+			})
+		})
+	} else {
+		// Vue.js SPA模式
+		log.Println("使用Vue.js前端应用")
+		r.Static("/assets", "./web/dist/assets")
+		r.StaticFile("/favicon.ico", "./web/dist/favicon.ico")
+
+		// SPA首页
+		r.GET("/", func(c *gin.Context) {
+			c.File("./web/dist/index.html")
+		})
+
+		// SPA路由支持 - 所有非API路由都返回index.html
+		r.NoRoute(func(c *gin.Context) {
+			if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+				c.JSON(http.StatusNotFound, gin.H{"error": "API endpoint not found"})
+				return
+			}
+			c.File("./web/dist/index.html")
+		})
+	}
 
 	// 启动服务器
 	addr := fmt.Sprintf(":%d", appConfig.App.Port)
@@ -124,7 +152,7 @@ func main() {
 	log.Printf("  - 资源监控: http://localhost:%d", appConfig.App.Port)
 	log.Printf("  - 集群管理: http://localhost:%d/clusters", appConfig.App.Port)
 	log.Printf("  - API文档: http://localhost:%d/api/v1/health", appConfig.App.Port)
-	
+
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("服务器启动失败: %v", err)
 	}

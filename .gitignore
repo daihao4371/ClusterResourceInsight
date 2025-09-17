@@ -1,0 +1,55 @@
+# 依赖包目录
+node_modules/
+*/node_modules/
+**/node_modules/
+
+# 前端构建产物
+web/dist/
+web-legacy/dist/
+*.map
+
+# Go编译产物
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# 日志文件
+*.log
+logs/
+
+# 临时文件
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 配置文件（敏感信息）
+config.toml
+*.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 缓存文件
+.cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

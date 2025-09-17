@@ -288,6 +288,8 @@ func (cs *ClusterService) CreateKubernetesClient(cluster *models.ClusterConfig) 
 			TLSClientConfig: rest.TLSClientConfig{
 				Insecure: true, // 在生产环境中应该设置为false并提供CA证书
 			},
+			// 增加超时配置以防止长时间等待
+			Timeout: 60 * time.Second,
 		}
 	case "cert":
 		config = &rest.Config{
@@ -296,6 +298,8 @@ func (cs *ClusterService) CreateKubernetesClient(cluster *models.ClusterConfig) 
 				CertData: []byte(authConfig.ClientCert),
 				KeyData:  []byte(authConfig.ClientKey),
 			},
+			// 增加超时配置以防止长时间等待
+			Timeout: 60 * time.Second,
 		}
 		if authConfig.CACert != "" {
 			config.TLSClientConfig.CAData = []byte(authConfig.CACert)
@@ -307,9 +311,15 @@ func (cs *ClusterService) CreateKubernetesClient(cluster *models.ClusterConfig) 
 		if err != nil {
 			return nil, nil, fmt.Errorf("解析kubeconfig失败: %v", err)
 		}
+		// 为kubeconfig方式也设置超时配置
+		config.Timeout = 60 * time.Second
 	default:
 		return nil, nil, fmt.Errorf("不支持的认证类型: %s", cluster.AuthType)
 	}
+
+	// 设置客户端限流配置，避免过度并发导致限流错误
+	config.QPS = 20.0 // 每秒最多20个请求，降低请求频率
+	config.Burst = 30 // 突发最多30个请求，适当降低突发量
 
 	// 创建Kubernetes客户端
 	kubeClient, err := kubernetes.NewForConfig(config)
@@ -328,22 +338,22 @@ func (cs *ClusterService) CreateKubernetesClient(cluster *models.ClusterConfig) 
 
 // ClusterTestResult 集群连接测试结果
 type ClusterTestResult struct {
-	Success      bool      `json:"success"`           // 测试是否成功
-	Status       string    `json:"status"`            // 集群状态：online/offline/error
-	Message      string    `json:"message"`           // 测试结果消息
-	Version      string    `json:"version"`           // Kubernetes版本
-	NodeCount    int       `json:"node_count"`        // 节点数量
-	NamespaceCount int     `json:"namespace_count"`   // 命名空间数量
-	PodCount     int       `json:"pod_count"`         // Pod总数
-	HasMetrics   bool      `json:"has_metrics"`       // 是否支持Metrics API
-	TestTime     time.Time `json:"test_time"`         // 测试时间
-	ResponseTime int64     `json:"response_time_ms"`  // 响应时间（毫秒）
+	Success        bool      `json:"success"`          // 测试是否成功
+	Status         string    `json:"status"`           // 集群状态：online/offline/error
+	Message        string    `json:"message"`          // 测试结果消息
+	Version        string    `json:"version"`          // Kubernetes版本
+	NodeCount      int       `json:"node_count"`       // 节点数量
+	NamespaceCount int       `json:"namespace_count"`  // 命名空间数量
+	PodCount       int       `json:"pod_count"`        // Pod总数
+	HasMetrics     bool      `json:"has_metrics"`      // 是否支持Metrics API
+	TestTime       time.Time `json:"test_time"`        // 测试时间
+	ResponseTime   int64     `json:"response_time_ms"` // 响应时间（毫秒）
 }
 
 // TestClusterConnection 测试集群连接
 func (cs *ClusterService) TestClusterConnection(clusterID uint) (*ClusterTestResult, error) {
 	startTime := time.Now()
-	
+
 	// 获取集群配置
 	cluster, err := cs.GetClusterByID(clusterID)
 	if err != nil {
@@ -439,7 +449,7 @@ func (cs *ClusterService) TestClusterConnection(clusterID uint) (*ClusterTestRes
 	// 测试成功
 	result.Success = true
 	result.Status = "online"
-	result.Message = fmt.Sprintf("集群连接正常，版本: %s，节点数: %d，命名空间数: %d，Pod数: %d", 
+	result.Message = fmt.Sprintf("集群连接正常，版本: %s，节点数: %d，命名空间数: %d，Pod数: %d",
 		result.Version, result.NodeCount, result.NamespaceCount, result.PodCount)
 	result.ResponseTime = time.Since(startTime).Milliseconds()
 
@@ -466,7 +476,7 @@ func (cs *ClusterService) TestClusterConnectionByConfig(req *CreateClusterReques
 	if err != nil {
 		return &ClusterTestResult{
 			Success:      false,
-			Status:       "error", 
+			Status:       "error",
 			Message:      fmt.Sprintf("序列化认证配置失败: %v", err),
 			TestTime:     time.Now(),
 			ResponseTime: time.Since(startTime).Milliseconds(),
@@ -548,7 +558,7 @@ func (cs *ClusterService) updateClusterStatus(cluster *models.ClusterConfig, sta
 		now := time.Now()
 		cluster.LastCollectAt = &now
 	}
-	
+
 	if err := cs.db.Save(cluster).Error; err != nil {
 		log.Printf("更新集群状态失败: %v", err)
 	}
@@ -562,7 +572,7 @@ func (cs *ClusterService) BatchTestAllClusters() (map[uint]*ClusterTestResult, e
 	}
 
 	results := make(map[uint]*ClusterTestResult)
-	
+
 	// 并发测试所有集群（限制并发数）
 	semaphore := make(chan struct{}, 5) // 最多5个并发测试
 	resultChan := make(chan struct {
@@ -572,7 +582,7 @@ func (cs *ClusterService) BatchTestAllClusters() (map[uint]*ClusterTestResult, e
 
 	for _, cluster := range clusters {
 		go func(c models.ClusterConfig) {
-			semaphore <- struct{}{} // 获取信号量
+			semaphore <- struct{}{}        // 获取信号量
 			defer func() { <-semaphore }() // 释放信号量
 
 			result, _ := cs.TestClusterConnection(c.ID)
