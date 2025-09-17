@@ -1,0 +1,42 @@
+# K8s 多集群资源监控系统配置文件
+
+# 数据库配置
+[database]
+host = "localhost"
+port = 3306
+username = "root"
+password = "123456"  # 请填入您的MySQL密码，或通过环境变量 DB_PASSWORD 设置
+database = "cluster_resource_insight"
+charset = "utf8mb4"
+
+# 应用配置
+[app]
+port = 9999
+debug = false
+
+# 加密配置
+[encryption]
+# 32字节的加密密钥，生产环境请更换为随机密钥
+key = "myclustermonitor32bytesecretkey!"
+
+# 日志配置
+[logging]
+level = "info"  # debug, info, warn, error
+file = "logs/app.log"
+
+# 监控配置
+[monitoring]
+# 默认采集间隔（分钟）
+default_collect_interval = 30
+# 最大并发采集数
+max_concurrent_collections = 10
+# 历史数据保留天数
+data_retention_days = 30
+
+# 告警配置
+[alert]
+enabled = true
+# 内存利用率过低阈值（百分比）
+memory_usage_threshold_low = 20
+# CPU利用率过低阈值（百分比）
+cpu_usage_threshold_low = 15

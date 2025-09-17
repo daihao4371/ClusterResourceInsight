@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.title}}</title>
+    <link href="/static/css/style.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- 导航栏 -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h1>K8s 多集群资源监控系统</h1>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link active">资源监控</a>
+                <a href="/clusters" class="nav-link">集群管理</a>
+            </div>
+        </nav>
+
+        <header>
+            <div class="page-header">
+                <h2>集群资源监控分析</h2>
+                <div class="cluster-selector">
+                    <label for="cluster-filter">集群筛选:</label>
+                    <select id="cluster-filter">
+                        <option value="">所有集群</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="summary" id="summary">
+                <div class="summary-item">
+                    <span class="label">分析集群:</span>
+                    <span class="value" id="analyzed-clusters">加载中...</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">总 Pod 数:</span>
+                    <span class="value" id="total-pods">加载中...</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">不合理配置:</span>
+                    <span class="value" id="unreasonable-pods">加载中...</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">更新时间:</span>
+                    <span class="value" id="update-time">加载中...</span>
+                </div>
+            </div>
+            <div class="controls">
+                <button id="refresh-btn" class="btn btn-primary">刷新数据</button>
+                <button id="export-btn" class="btn btn-secondary">导出报告</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>正在分析集群资源...</p>
+            </div>
+
+            <div class="table-container" id="table-container" style="display: none;">
+                <h2>资源配置问题 Top 50</h2>
+                <table class="resource-table" id="resource-table">
+                    <thead>
+                        <tr>
+                            <th>集群</th>
+                            <th>Pod 名称</th>
+                            <th>命名空间</th>
+                            <th>节点</th>
+                            <th>内存使用</th>
+                            <th>内存请求</th>
+                            <th>内存请求%</th>
+                            <th>内存限制</th>
+                            <th>内存限制%</th>
+                            <th>CPU使用</th>
+                            <th>CPU请求</th>
+                            <th>CPU请求%</th>
+                            <th>CPU限制</th>
+                            <th>CPU限制%</th>
+                            <th>状态</th>
+                            <th>问题描述</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="error" id="error-container" style="display: none;">
+                <h3>错误信息</h3>
+                <p id="error-message"></p>
+                <button id="retry-btn" class="btn btn-primary">重试</button>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
