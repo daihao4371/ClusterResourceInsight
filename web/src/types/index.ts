@@ -7,6 +7,40 @@ export interface ApiResponse<T = any> {
 
 // 集群相关类型
 export interface Cluster {
+  id: string  // 前端使用string类型的ID
+  name: string
+  alias?: string
+  endpoint: string
+  status: 'online' | 'offline' | 'error' | 'unknown'
+  auth_type?: string
+  collect_interval?: number
+  created_at?: string
+  updated_at?: string
+  last_collect_at?: string
+  // 前端UI展示需要的额外字段
+  region?: string
+  nodes?: number
+  pods?: number
+  cpuUsage?: number
+  memoryUsage?: number
+  tags?: string[]
+  // 实时统计数据字段
+  version?: string
+  namespace_count?: number
+  response_time_ms?: number
+  has_metrics?: boolean
+  last_test_time?: string
+  // 详细资源信息字段
+  cpuUsedCores?: number
+  cpuTotalCores?: number
+  memoryUsedGB?: number
+  memoryTotalGB?: number
+  hasRealUsage?: boolean
+  dataSource?: string
+}
+
+// 后端原始集群数据结构
+export interface BackendCluster {
   id: number
   cluster_name: string
   cluster_alias?: string
@@ -31,6 +65,14 @@ export interface ClusterTestResult {
   has_metrics: boolean
   test_time: string
   response_time_ms: number
+  cpu_usage?: number
+  memory_usage?: number
+  cpu_used_cores?: number
+  cpu_total_cores?: number
+  memory_used_gb?: number
+  memory_total_gb?: number
+  has_real_usage?: boolean
+  data_source?: string
 }
 
 // Pod 相关类型

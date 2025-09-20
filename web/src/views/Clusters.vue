@@ -8,11 +8,11 @@
       </div>
       
       <div class="flex items-center space-x-3">
-        <button class="btn-secondary">
-          <RefreshCw class="w-4 h-4 mr-2" />
-          刷新数据
+        <button @click="refreshAllClusters" :disabled="loading" class="btn-secondary">
+          <RefreshCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': loading }" />
+          {{ loading ? '加载中...' : '刷新数据' }}
         </button>
-        <button class="btn-primary">
+        <button @click="addNewCluster" class="btn-primary">
           <Plus class="w-4 h-4 mr-2" />
           添加集群
         </button>
@@ -51,6 +51,22 @@
       </div>
     </div>
 
+    <!-- 错误提示 -->
+    <div v-if="error" class="glass-card p-4 border-danger-500/50 bg-danger-500/10">
+      <div class="flex items-center space-x-3">
+        <div class="w-6 h-6 rounded-full bg-danger-500/20 flex items-center justify-center">
+          <ExternalLink class="w-4 h-4 text-danger-400" />
+        </div>
+        <div>
+          <p class="text-danger-400 font-medium">加载集群数据失败</p>
+          <p class="text-sm text-gray-400 mt-1">{{ error }}</p>
+        </div>
+        <button @click="fetchClusters" class="btn-secondary ml-auto">
+          重试
+        </button>
+      </div>
+    </div>
+
     <!-- 集群列表 -->
     <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
       <div
@@ -85,55 +101,88 @@
         <div class="grid grid-cols-2 gap-4 mb-4">
           <div>
             <p class="text-xs text-gray-500 mb-1">节点数量</p>
-            <p class="text-lg font-semibold">{{ cluster.nodes }}</p>
+            <p class="text-lg font-semibold">{{ cluster.nodes || 0 }}</p>
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1">Pod数量</p>
-            <p class="text-lg font-semibold">{{ cluster.pods }}</p>
+            <p class="text-lg font-semibold">{{ cluster.pods || 0 }}</p>
           </div>
           <div>
-            <p class="text-xs text-gray-500 mb-1">CPU使用率</p>
+            <p class="text-xs text-gray-500 mb-1">K8s版本</p>
+            <p class="text-sm font-medium text-primary-400">{{ cluster.version || '未知' }}</p>
+          </div>
+          <div>
+            <p class="text-xs text-gray-500 mb-1">命名空间</p>
+            <p class="text-lg font-semibold">{{ cluster.namespace_count || 0 }}</p>
+          </div>
+          <div class="col-span-2">
+            <p class="text-xs text-gray-500 mb-1">
+              CPU使用率
+              <span v-if="cluster.dataSource === 'capacity'" class="text-yellow-400 text-[10px]">(仅容量)</span>
+            </p>
             <div class="flex items-center space-x-2">
               <div class="flex-1 bg-dark-700 rounded-full h-2">
                 <div 
                   class="h-2 rounded-full transition-all duration-1000"
                   :class="getResourceBarClass(cluster.cpuUsage)"
-                  :style="{ width: `${cluster.cpuUsage}%` }"
+                  :style="{ width: `${cluster.cpuUsage || 0}%` }"
                 ></div>
               </div>
-              <span class="text-sm font-medium">{{ cluster.cpuUsage }}%</span>
+              <span class="text-sm font-medium">{{ cluster.cpuUsage || 0 }}%</span>
             </div>
+            <p v-if="cluster.hasRealUsage" class="text-[10px] text-gray-400 mt-1">
+              {{ cluster.cpuUsedCores || 0 }} / {{ cluster.cpuTotalCores || 0 }} cores
+            </p>
+            <p v-else class="text-[10px] text-gray-400 mt-1">
+              总计: {{ cluster.cpuTotalCores || 0 }} cores
+            </p>
           </div>
-          <div>
-            <p class="text-xs text-gray-500 mb-1">内存使用率</p>
+          <div class="col-span-2">
+            <p class="text-xs text-gray-500 mb-1">
+              内存使用率
+              <span v-if="cluster.dataSource === 'capacity'" class="text-yellow-400 text-[10px]">(仅容量)</span>
+            </p>
             <div class="flex items-center space-x-2">
               <div class="flex-1 bg-dark-700 rounded-full h-2">
                 <div 
                   class="h-2 rounded-full transition-all duration-1000"
                   :class="getResourceBarClass(cluster.memoryUsage)"
-                  :style="{ width: `${cluster.memoryUsage}%` }"
+                  :style="{ width: `${cluster.memoryUsage || 0}%` }"
                 ></div>
               </div>
-              <span class="text-sm font-medium">{{ cluster.memoryUsage }}%</span>
+              <span class="text-sm font-medium">{{ cluster.memoryUsage || 0 }}%</span>
             </div>
+            <p v-if="cluster.hasRealUsage" class="text-[10px] text-gray-400 mt-1">
+              {{ formatMemory(cluster.memoryUsedGB) }} / {{ formatMemory(cluster.memoryTotalGB) }}
+            </p>
+            <p v-else class="text-[10px] text-gray-400 mt-1">
+              总计: {{ formatMemory(cluster.memoryTotalGB) }}
+            </p>
           </div>
         </div>
 
         <!-- 集群标签 -->
         <div class="flex flex-wrap gap-2 mb-4">
           <span 
-            v-for="tag in cluster.tags"
+            v-for="tag in (cluster.tags || [])"
             :key="tag"
             class="px-2 py-1 text-xs bg-primary-500/20 text-primary-400 rounded-full border border-primary-500/30"
           >
             {{ tag }}
+          </span>
+          <!-- 如果没有标签，显示认证类型 -->
+          <span 
+            v-if="!cluster.tags?.length && cluster.auth_type"
+            class="px-2 py-1 text-xs bg-gray-500/20 text-gray-400 rounded-full border border-gray-500/30"
+          >
+            {{ cluster.auth_type }}
           </span>
         </div>
 
         <!-- 最后更新时间 -->
         <div class="flex items-center justify-between text-sm">
           <span class="text-gray-500">
-            更新: {{ formatDistanceToNow(cluster.lastUpdate) }}
+            更新: {{ formatLastUpdate(cluster) }}
           </span>
           <div class="flex space-x-2">
             <button 
@@ -167,7 +216,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { 
   Server, 
   Plus, 
@@ -177,68 +226,40 @@ import {
   ExternalLink 
 } from 'lucide-vue-next'
 import { formatDistanceToNow } from '../utils/date'
-
-interface Cluster {
-  id: string
-  name: string
-  endpoint: string
-  status: 'online' | 'offline' | 'error'
-  region: string
-  nodes: number
-  pods: number
-  cpuUsage: number
-  memoryUsage: number
-  tags: string[]
-  lastUpdate: string
-}
+import { getClustersWithStats, testCluster } from '../api/clusters'
+import type { Cluster } from '../types'
 
 // 搜索和筛选状态
 const searchQuery = ref('')
 const statusFilter = ref('')
 const regionFilter = ref('')
 
-// 模拟集群数据
-const clusters = ref<Cluster[]>([
-  {
-    id: '1',
-    name: 'prod-cluster-01',
-    endpoint: 'https://prod-k8s-01.example.com',
-    status: 'online',
-    region: 'us-east',
-    nodes: 12,
-    pods: 148,
-    cpuUsage: 65,
-    memoryUsage: 72,
-    tags: ['production', 'web'],
-    lastUpdate: new Date(Date.now() - 5 * 60 * 1000).toISOString()
-  },
-  {
-    id: '2',
-    name: 'dev-cluster-02',
-    endpoint: 'https://dev-k8s-02.example.com',
-    status: 'online',
-    region: 'us-west',
-    nodes: 6,
-    pods: 82,
-    cpuUsage: 35,
-    memoryUsage: 48,
-    tags: ['development', 'api'],
-    lastUpdate: new Date(Date.now() - 10 * 60 * 1000).toISOString()
-  },
-  {
-    id: '3',
-    name: 'test-cluster-03',
-    endpoint: 'https://test-k8s-03.example.com',
-    status: 'error',
-    region: 'eu-central',
-    nodes: 4,
-    pods: 25,
-    cpuUsage: 0,
-    memoryUsage: 0,
-    tags: ['testing'],
-    lastUpdate: new Date(Date.now() - 30 * 60 * 1000).toISOString()
+// 数据状态
+const clusters = ref<Cluster[]>([])
+const loading = ref(false)
+const error = ref<string | null>(null)
+
+// 获取集群数据
+const fetchClusters = async () => {
+  try {
+    loading.value = true
+    error.value = null
+    console.log('开始获取集群数据...')
+    // 使用带统计数据的API获取集群信息
+    clusters.value = await getClustersWithStats()
+    console.log('获取到的集群数据:', clusters.value)
+    
+    // 输出每个集群的关键信息
+    clusters.value.forEach(cluster => {
+      console.log(`集群 ${cluster.name}: nodes=${cluster.nodes}, pods=${cluster.pods}, status=${cluster.status}`)
+    })
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '获取集群数据失败'
+    console.error('获取集群数据失败:', err)
+  } finally {
+    loading.value = false
   }
-])
+}
 
 // 筛选后的集群列表
 const filteredClusters = computed(() => {
@@ -259,7 +280,8 @@ const getClusterStatusClass = (status: Cluster['status']) => {
   const classes = {
     online: 'border-success-500/30 hover:border-success-400/50',
     offline: 'border-gray-500/30 hover:border-gray-400/50',
-    error: 'border-danger-500/30 hover:border-danger-400/50'
+    error: 'border-danger-500/30 hover:border-danger-400/50',
+    unknown: 'border-warning-500/30 hover:border-warning-400/50'
   }
   return classes[status]
 }
@@ -268,12 +290,14 @@ const getStatusIndicatorClass = (status: Cluster['status']) => {
   const classes = {
     online: 'status-online',
     offline: 'status-offline',
-    error: 'status-error'
+    error: 'status-error',
+    unknown: 'status-warning'
   }
   return classes[status]
 }
 
-const getResourceBarClass = (usage: number) => {
+const getResourceBarClass = (usage?: number) => {
+  if (!usage) return 'bg-gray-500'
   if (usage >= 80) return 'bg-gradient-to-r from-danger-600 to-danger-400'
   if (usage >= 60) return 'bg-gradient-to-r from-warning-600 to-warning-400'
   return 'bg-gradient-to-r from-success-600 to-success-400'
@@ -282,11 +306,53 @@ const getResourceBarClass = (usage: number) => {
 // 操作方法
 const viewClusterDetail = (cluster: Cluster) => {
   console.log('查看集群详情:', cluster)
+  // TODO: 实现集群详情页面跳转
 }
 
-const refreshCluster = (cluster: Cluster) => {
-  console.log('刷新集群数据:', cluster)
+const refreshCluster = async (cluster: Cluster) => {
+  try {
+    console.log('刷新集群数据:', cluster)
+    // 可以调用测试接口来刷新单个集群状态
+    if (cluster.id) {
+      await testCluster(parseInt(cluster.id))
+      // 重新获取所有集群数据
+      await fetchClusters()
+    }
+  } catch (err) {
+    console.error('刷新集群失败:', err)
+  }
 }
+
+// 刷新所有集群数据
+const refreshAllClusters = async () => {
+  await fetchClusters()
+}
+
+// 添加集群
+const addNewCluster = () => {
+  console.log('添加新集群')
+  // TODO: 实现添加集群弹窗
+}
+
+// 格式化最后更新时间
+const formatLastUpdate = (cluster: Cluster) => {
+  const updateTime = cluster.last_collect_at || cluster.updated_at
+  return updateTime ? formatDistanceToNow(updateTime) : '未知'
+}
+
+// 格式化内存显示
+const formatMemory = (memoryGB?: number) => {
+  if (!memoryGB) return '0 GB'
+  if (memoryGB >= 1024) {
+    return `${(memoryGB / 1024).toFixed(1)} TB`
+  }
+  return `${memoryGB.toFixed(1)} GB`
+}
+
+// 组件挂载时获取数据
+onMounted(() => {
+  fetchClusters()
+})
 </script>
 
 <style scoped>

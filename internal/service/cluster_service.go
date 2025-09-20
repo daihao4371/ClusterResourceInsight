@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"cluster-resource-insight/internal/models"
 
 	"gorm.io/gorm"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -336,6 +338,110 @@ func (cs *ClusterService) CreateKubernetesClient(cluster *models.ClusterConfig) 
 	return kubeClient, metricsClient, nil
 }
 
+// ClusterResourceInfo 集群资源详细信息
+type ClusterResourceInfo struct {
+	CPUUsage       float64 // CPU使用率百分比
+	CPUUsedCores   float64 // 已使用CPU核数
+	CPUTotalCores  float64 // 总CPU核数
+	MemoryUsage    float64 // 内存使用率百分比
+	MemoryUsedGB   float64 // 已使用内存（GB）
+	MemoryTotalGB  float64 // 总内存（GB）
+	HasRealUsage   bool    // 是否有真实使用率数据（来自Metrics API）
+	DataSource     string  // 数据来源标识: "metrics" 或 "capacity"
+}
+
+// getClusterResourceUsage 获取集群的详细资源使用信息
+func (cs *ClusterService) getClusterResourceUsage(ctx context.Context, kubeClient kubernetes.Interface, metricsClient metricsclientset.Interface) *ClusterResourceInfo {
+	// 设置短超时以防止阻塞
+	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	result := &ClusterResourceInfo{
+		DataSource: "none",
+	}
+
+	// 获取节点列表 - 这是必需的基础信息
+	nodes, err := kubeClient.CoreV1().Nodes().List(timeoutCtx, metav1.ListOptions{})
+	if err != nil {
+		logger.Error("获取节点列表失败: %v", err)
+		return result
+	}
+
+	if len(nodes.Items) == 0 {
+		return result
+	}
+
+	// 首先获取节点容量信息（总是可用的）
+	var totalCPUCapacity, totalMemoryCapacity int64
+	for _, node := range nodes.Items {
+		if cpu, ok := node.Status.Capacity[corev1.ResourceCPU]; ok {
+			totalCPUCapacity += cpu.MilliValue()
+		}
+		if memory, ok := node.Status.Capacity[corev1.ResourceMemory]; ok {
+			totalMemoryCapacity += memory.Value()
+		}
+	}
+
+	// 设置基础容量信息
+	if totalCPUCapacity > 0 {
+		result.CPUTotalCores = math.Round(float64(totalCPUCapacity)/1000.0*100) / 100
+	}
+	if totalMemoryCapacity > 0 {
+		result.MemoryTotalGB = math.Round(float64(totalMemoryCapacity)/(1024*1024*1024)*100) / 100
+	}
+	result.DataSource = "capacity"
+
+	// 尝试获取Metrics API数据
+	if metricsClient != nil {
+		nodeMetrics, err := metricsClient.MetricsV1beta1().NodeMetricses().List(timeoutCtx, metav1.ListOptions{})
+		if err != nil {
+			logger.Info("Metrics API不可用，仅显示容量信息: %v", err)
+			// 返回仅包含容量信息的结果
+			return result
+		}
+
+		// 如果Metrics API可用，计算使用率
+		var totalCPUUsage, totalMemoryUsage int64
+		for _, nodeMetric := range nodeMetrics.Items {
+			if cpu, ok := nodeMetric.Usage[corev1.ResourceCPU]; ok {
+				totalCPUUsage += cpu.MilliValue()
+			}
+			if memory, ok := nodeMetric.Usage[corev1.ResourceMemory]; ok {
+				totalMemoryUsage += memory.Value()
+			}
+		}
+
+		// 计算使用量和使用率
+		if totalCPUCapacity > 0 {
+			result.CPUUsedCores = math.Round(float64(totalCPUUsage)/1000.0*100) / 100
+			usage := (float64(totalCPUUsage) / float64(totalCPUCapacity)) * 100
+			result.CPUUsage = math.Round(usage*100) / 100
+		}
+
+		if totalMemoryCapacity > 0 {
+			result.MemoryUsedGB = math.Round(float64(totalMemoryUsage)/(1024*1024*1024)*100) / 100
+			usage := (float64(totalMemoryUsage) / float64(totalMemoryCapacity)) * 100
+			result.MemoryUsage = math.Round(usage*100) / 100
+		}
+
+		// 限制百分比在合理范围内
+		if result.CPUUsage > 100 {
+			result.CPUUsage = 100
+		}
+		if result.MemoryUsage > 100 {
+			result.MemoryUsage = 100
+		}
+
+		result.HasRealUsage = true
+		result.DataSource = "metrics"
+		logger.Info("通过Metrics API获取资源使用率数据")
+	} else {
+		logger.Info("Metrics客户端不可用，仅显示容量信息")
+	}
+
+	return result
+}
+
 // ClusterTestResult 集群连接测试结果
 type ClusterTestResult struct {
 	Success        bool      `json:"success"`          // 测试是否成功
@@ -348,6 +454,17 @@ type ClusterTestResult struct {
 	HasMetrics     bool      `json:"has_metrics"`      // 是否支持Metrics API
 	TestTime       time.Time `json:"test_time"`        // 测试时间
 	ResponseTime   int64     `json:"response_time_ms"` // 响应时间（毫秒）
+	// CPU资源信息
+	CPUUsage       float64   `json:"cpu_usage"`        // CPU使用率百分比（保留2位小数）
+	CPUUsedCores   float64   `json:"cpu_used_cores"`   // 已使用CPU核数
+	CPUTotalCores  float64   `json:"cpu_total_cores"`  // 总CPU核数
+	// 内存资源信息
+	MemoryUsage    float64   `json:"memory_usage"`     // 内存使用率百分比（保留2位小数）
+	MemoryUsedGB   float64   `json:"memory_used_gb"`   // 已使用内存（GB）
+	MemoryTotalGB  float64   `json:"memory_total_gb"`  // 总内存（GB）
+	// 资源数据来源信息
+	HasRealUsage   bool      `json:"has_real_usage"`   // 是否有真实使用率数据
+	DataSource     string    `json:"data_source"`      // 数据来源: "metrics" 或 "capacity"
 }
 
 // TestClusterConnection 测试集群连接
@@ -437,13 +554,33 @@ func (cs *ClusterService) TestClusterConnection(clusterID uint) (*ClusterTestRes
 	}
 	result.PodCount = len(pods.Items)
 
-	// 5. 测试Metrics API
+	// 5. 测试Metrics API并获取资源信息
 	_, err = metricsClient.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{Limit: 1})
 	if err != nil {
 		result.HasMetrics = false
 		logger.Info("集群 %s Metrics API 不可用: %v", cluster.ClusterName, err)
 	} else {
 		result.HasMetrics = true
+	}
+	
+	// 6. 获取集群资源信息（无论Metrics API是否可用）
+	resourceInfo := cs.getClusterResourceUsage(ctx, kubeClient, metricsClient)
+	result.CPUUsage = resourceInfo.CPUUsage
+	result.MemoryUsage = resourceInfo.MemoryUsage
+	result.CPUUsedCores = resourceInfo.CPUUsedCores
+	result.CPUTotalCores = resourceInfo.CPUTotalCores
+	result.MemoryUsedGB = resourceInfo.MemoryUsedGB
+	result.MemoryTotalGB = resourceInfo.MemoryTotalGB
+	result.HasRealUsage = resourceInfo.HasRealUsage
+	result.DataSource = resourceInfo.DataSource
+	
+	if resourceInfo.HasRealUsage {
+		logger.Info("集群 %s 资源使用率 - CPU: %.2f%% (%.2f/%.2f cores), Memory: %.2f%% (%.2fGB/%.2fGB)", 
+			cluster.ClusterName, resourceInfo.CPUUsage, resourceInfo.CPUUsedCores, resourceInfo.CPUTotalCores,
+			resourceInfo.MemoryUsage, resourceInfo.MemoryUsedGB, resourceInfo.MemoryTotalGB)
+	} else {
+		logger.Info("集群 %s 容量信息 - CPU: %.2f cores, Memory: %.2fGB (无实时使用率数据)", 
+			cluster.ClusterName, resourceInfo.CPUTotalCores, resourceInfo.MemoryTotalGB)
 	}
 
 	// 测试成功
@@ -539,9 +676,24 @@ func (cs *ClusterService) TestClusterConnectionByConfig(req *CreateClusterReques
 		result.NamespaceCount = len(namespaces.Items)
 	}
 
-	// 测试Metrics API
+	// 测试Metrics API并获取资源信息
 	_, err = metricsClient.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{Limit: 1})
-	result.HasMetrics = (err == nil)
+	if err != nil {
+		result.HasMetrics = false
+	} else {
+		result.HasMetrics = true
+	}
+	
+	// 获取资源信息（无论Metrics API是否可用）
+	resourceInfo := cs.getClusterResourceUsage(ctx, kubeClient, metricsClient)
+	result.CPUUsage = resourceInfo.CPUUsage
+	result.MemoryUsage = resourceInfo.MemoryUsage
+	result.CPUUsedCores = resourceInfo.CPUUsedCores
+	result.CPUTotalCores = resourceInfo.CPUTotalCores
+	result.MemoryUsedGB = resourceInfo.MemoryUsedGB
+	result.MemoryTotalGB = resourceInfo.MemoryTotalGB
+	result.HasRealUsage = resourceInfo.HasRealUsage
+	result.DataSource = resourceInfo.DataSource
 
 	result.Success = true
 	result.Status = "online"
