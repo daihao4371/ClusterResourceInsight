@@ -2,14 +2,14 @@ package database
 
 import (
 	"fmt"
-	"log"
 	"time"
 
+	"cluster-resource-insight/internal/logger"
 	"cluster-resource-insight/internal/models"
 	
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // DatabaseConfig 数据库配置结构
@@ -48,12 +48,12 @@ func InitDatabase(config *DatabaseConfig) error {
 		config.Charset,
 	)
 
-	log.Printf("正在连接数据库: %s:%d/%s", config.Host, config.Port, config.DBName)
+	logger.Info("正在连接数据库: %s:%d/%s", config.Host, config.Port, config.DBName)
 
 	// 打开数据库连接
 	var err error
 	DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info), // 启用SQL日志
+		Logger: gormlogger.Default.LogMode(gormlogger.Info), // 启用SQL日志
 	})
 	if err != nil {
 		return fmt.Errorf("连接数据库失败: %v", err)
@@ -75,13 +75,13 @@ func InitDatabase(config *DatabaseConfig) error {
 		return fmt.Errorf("数据库连接测试失败: %v", err)
 	}
 
-	log.Println("数据库连接成功")
+	logger.Info("数据库连接成功")
 	return nil
 }
 
 // MigrateDatabase 执行数据库迁移，创建所有表
 func MigrateDatabase() error {
-	log.Println("开始执行数据库迁移...")
+	logger.Info("开始执行数据库迁移...")
 
 	// 自动迁移所有模型
 	err := DB.AutoMigrate(
@@ -100,7 +100,7 @@ func MigrateDatabase() error {
 		return fmt.Errorf("初始化默认配置失败: %v", err)
 	}
 
-	log.Println("数据库迁移完成")
+	logger.Info("数据库迁移完成")
 	return nil
 }
 
@@ -154,7 +154,7 @@ func initDefaultSettings() error {
 			if err := DB.Create(&setting).Error; err != nil {
 				return fmt.Errorf("创建默认配置 %s 失败: %v", setting.Key, err)
 			}
-			log.Printf("创建默认配置: %s = %s", setting.Key, setting.Value)
+			logger.Info("创建默认配置: %s = %s", setting.Key, setting.Value)
 		}
 	}
 

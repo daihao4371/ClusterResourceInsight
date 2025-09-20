@@ -53,3 +53,14 @@ config.toml
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# 文档和说明文件（项目相关但不需要版本控制）
+需求文档.md
+PERFORMANCE_OPTIMIZATION.md
+DEPLOYMENT.md
+
+# 前端依赖锁定文件（根目录的package-lock.json不应该存在）
+package-lock.json
+
+# Nginx配置文件（部署相关，可选择性忽略）
+nginx-cluster-insight.conf

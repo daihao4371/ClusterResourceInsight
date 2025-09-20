@@ -2,9 +2,9 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"os"
 
+	"cluster-resource-insight/internal/logger"
 	"github.com/spf13/viper"
 )
 
@@ -106,7 +106,7 @@ func LoadConfig(configPath string) (*AppConfig, error) {
 	}
 
 	AppConf = &config
-	log.Printf("配置加载成功: %s", configPath)
+	logger.Info("配置加载成功: %s", configPath)
 	return &config, nil
 }
 

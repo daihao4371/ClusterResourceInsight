@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	"cluster-resource-insight/internal/crypto"
 	"cluster-resource-insight/internal/database"
+	"cluster-resource-insight/internal/logger"
 	"cluster-resource-insight/internal/models"
 
 	"gorm.io/gorm"
@@ -127,7 +127,7 @@ func (cs *ClusterService) CreateCluster(req *CreateClusterRequest) (*models.Clus
 		return nil, fmt.Errorf("保存集群配置失败: %v", err)
 	}
 
-	log.Printf("成功创建集群配置: %s (ID: %d)", cluster.ClusterName, cluster.ID)
+	logger.Info("成功创建集群配置: %s (ID: %d)", cluster.ClusterName, cluster.ID)
 	return cluster, nil
 }
 
@@ -208,7 +208,7 @@ func (cs *ClusterService) UpdateCluster(clusterID uint, req *UpdateClusterReques
 		return nil, fmt.Errorf("更新集群配置失败: %v", err)
 	}
 
-	log.Printf("成功更新集群配置: %s (ID: %d)", cluster.ClusterName, cluster.ID)
+	logger.Info("成功更新集群配置: %s (ID: %d)", cluster.ClusterName, cluster.ID)
 	return cluster, nil
 }
 
@@ -224,7 +224,7 @@ func (cs *ClusterService) DeleteCluster(clusterID uint) error {
 		return fmt.Errorf("删除集群配置失败: %v", err)
 	}
 
-	log.Printf("成功删除集群配置: %s (ID: %d)", cluster.ClusterName, cluster.ID)
+	logger.Info("成功删除集群配置: %s (ID: %d)", cluster.ClusterName, cluster.ID)
 	return nil
 }
 
@@ -441,7 +441,7 @@ func (cs *ClusterService) TestClusterConnection(clusterID uint) (*ClusterTestRes
 	_, err = metricsClient.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{Limit: 1})
 	if err != nil {
 		result.HasMetrics = false
-		log.Printf("集群 %s Metrics API 不可用: %v", cluster.ClusterName, err)
+		logger.Info("集群 %s Metrics API 不可用: %v", cluster.ClusterName, err)
 	} else {
 		result.HasMetrics = true
 	}
@@ -456,7 +456,7 @@ func (cs *ClusterService) TestClusterConnection(clusterID uint) (*ClusterTestRes
 	// 更新集群状态为在线
 	cs.updateClusterStatus(cluster, "online")
 
-	log.Printf("集群连接测试成功: %s (%dms)", cluster.ClusterName, result.ResponseTime)
+	logger.Info("集群连接测试成功: %s (%dms)", cluster.ClusterName, result.ResponseTime)
 	return result, nil
 }
 
@@ -560,7 +560,7 @@ func (cs *ClusterService) updateClusterStatus(cluster *models.ClusterConfig, sta
 	}
 
 	if err := cs.db.Save(cluster).Error; err != nil {
-		log.Printf("更新集群状态失败: %v", err)
+		logger.Error("更新集群状态失败: %v", err)
 	}
 }
 
@@ -599,6 +599,6 @@ func (cs *ClusterService) BatchTestAllClusters() (map[uint]*ClusterTestResult, e
 		results[res.ID] = res.Result
 	}
 
-	log.Printf("批量测试完成，共测试 %d 个集群", len(clusters))
+	logger.Info("批量测试完成，共测试 %d 个集群", len(clusters))
 	return results, nil
 }

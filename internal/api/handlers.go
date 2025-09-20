@@ -1,11 +1,11 @@
 package api
 
 import (
-	"log"
-	"net/http"
 	"strconv"
 
 	"cluster-resource-insight/internal/collector"
+	"cluster-resource-insight/internal/logger"
+	"cluster-resource-insight/internal/response"
 	"cluster-resource-insight/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -86,25 +86,18 @@ func createCluster(clusterService *service.ClusterService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req service.CreateClusterRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "请求参数格式错误: " + err.Error(),
-			})
+			response.BadRequest("请求参数格式错误: "+err.Error(), c)
 			return
 		}
 
 		cluster, err := clusterService.CreateCluster(&req)
 		if err != nil {
-			log.Printf("创建集群失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("创建集群失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusCreated, gin.H{
-			"message": "集群创建成功",
-			"data":    cluster,
-		})
+		response.OkWithDetailed(cluster, "集群创建成功", c)
 	}
 }
 
@@ -113,17 +106,15 @@ func getAllClusters(clusterService *service.ClusterService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		clusters, err := clusterService.GetAllClusters()
 		if err != nil {
-			log.Printf("获取集群列表失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("获取集群列表失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		response.OkWithData(gin.H{
 			"data":  clusters,
 			"count": len(clusters),
-		})
+		}, c)
 	}
 }
 
@@ -133,23 +124,19 @@ func getClusterByID(clusterService *service.ClusterService) gin.HandlerFunc {
 		idStr := c.Param("id")
 		id, err := strconv.ParseUint(idStr, 10, 32)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "无效的集群ID",
-			})
+			response.BadRequest("无效的集群ID", c)
 			return
 		}
 
 		cluster, err := clusterService.GetClusterByID(uint(id))
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
-				"error": err.Error(),
-			})
+			response.NotFound(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		response.OkWithData(gin.H{
 			"data": cluster,
-		})
+		}, c)
 	}
 }
 
@@ -159,33 +146,24 @@ func updateCluster(clusterService *service.ClusterService) gin.HandlerFunc {
 		idStr := c.Param("id")
 		id, err := strconv.ParseUint(idStr, 10, 32)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "无效的集群ID",
-			})
+			response.BadRequest("无效的集群ID", c)
 			return
 		}
 
 		var req service.UpdateClusterRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "请求参数格式错误: " + err.Error(),
-			})
+			response.BadRequest("请求参数格式错误: "+err.Error(), c)
 			return
 		}
 
 		cluster, err := clusterService.UpdateCluster(uint(id), &req)
 		if err != nil {
-			log.Printf("更新集群失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("更新集群失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"message": "集群更新成功",
-			"data":    cluster,
-		})
+		response.OkWithDetailed(cluster, "集群更新成功", c)
 	}
 }
 
@@ -195,24 +173,18 @@ func deleteCluster(clusterService *service.ClusterService) gin.HandlerFunc {
 		idStr := c.Param("id")
 		id, err := strconv.ParseUint(idStr, 10, 32)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "无效的集群ID",
-			})
+			response.BadRequest("无效的集群ID", c)
 			return
 		}
 
 		err = clusterService.DeleteCluster(uint(id))
 		if err != nil {
-			log.Printf("删除集群失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("删除集群失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"message": "集群删除成功",
-		})
+		response.OkWithMessage("集群删除成功", c)
 	}
 }
 
@@ -222,24 +194,20 @@ func testClusterConnection(clusterService *service.ClusterService) gin.HandlerFu
 		idStr := c.Param("id")
 		id, err := strconv.ParseUint(idStr, 10, 32)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "无效的集群ID",
-			})
+			response.BadRequest("无效的集群ID", c)
 			return
 		}
 
 		result, err := clusterService.TestClusterConnection(uint(id))
 		if err != nil {
-			log.Printf("测试集群连接失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("测试集群连接失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		response.OkWithData(gin.H{
 			"data": result,
-		})
+		}, c)
 	}
 }
 
@@ -248,24 +216,20 @@ func testClusterByConfig(clusterService *service.ClusterService) gin.HandlerFunc
 	return func(c *gin.Context) {
 		var req service.CreateClusterRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "请求参数格式错误: " + err.Error(),
-			})
+			response.BadRequest("请求参数格式错误: "+err.Error(), c)
 			return
 		}
 
 		result, err := clusterService.TestClusterConnectionByConfig(&req)
 		if err != nil {
-			log.Printf("测试集群配置失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("测试集群配置失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		response.OkWithData(gin.H{
 			"data": result,
-		})
+		}, c)
 	}
 }
 
@@ -274,34 +238,30 @@ func batchTestAllClusters(clusterService *service.ClusterService) gin.HandlerFun
 	return func(c *gin.Context) {
 		results, err := clusterService.BatchTestAllClusters()
 		if err != nil {
-			log.Printf("批量测试集群失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("批量测试集群失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		response.OkWithData(gin.H{
 			"data":  results,
 			"count": len(results),
-		})
+		}, c)
 	}
 }
 
 func getResourceAnalysis(resourceCollector *collector.ResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Println("Starting resource analysis...")
+		logger.Info("Starting resource analysis...")
 		result, err := resourceCollector.CollectAllPodsData(c.Request.Context())
 		if err != nil {
-			log.Printf("Error in resource analysis: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("Error in resource analysis: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		log.Printf("Analysis complete: total_pods=%d, unreasonable_pods=%d", result.TotalPods, result.UnreasonablePods)
-		c.JSON(http.StatusOK, result)
+		logger.Info("Analysis complete: total_pods=%d, unreasonable_pods=%d", result.TotalPods, result.UnreasonablePods)
+		response.OkWithData(result, c)
 	}
 }
 
@@ -318,9 +278,7 @@ func getPodsData(resourceCollector *collector.ResourceCollector) gin.HandlerFunc
 
 		result, err := resourceCollector.CollectAllPodsData(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
@@ -330,27 +288,27 @@ func getPodsData(resourceCollector *collector.ResourceCollector) gin.HandlerFunc
 			if len(pods) > limit {
 				pods = pods[:limit]
 			}
-			c.JSON(http.StatusOK, gin.H{
-				"pods":        pods,
-				"total_count": len(result.Top50Problems),
-				"limit":       limit,
-			})
+		response.OkWithData(gin.H{
+			"pods":        pods,
+			"total_count": len(result.Top50Problems),
+			"limit":       limit,
+		}, c)
 		} else {
 			// 返回所有数据，这里需要重新收集
-			c.JSON(http.StatusOK, gin.H{
+			response.OkWithData(gin.H{
 				"total_pods":        result.TotalPods,
 				"unreasonable_pods": result.UnreasonablePods,
 				"problems":          result.Top50Problems[:min(limit, len(result.Top50Problems))],
-			})
+			}, c)
 		}
 	}
 }
 
 func healthCheck(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
+	response.OkWithData(gin.H{
 		"status": "healthy",
 		"service": "cluster-resource-insight",
-	})
+	}, c)
 }
 
 func min(a, b int) int {
@@ -371,18 +329,16 @@ func getTopMemoryRequestPods(multiCollector *collector.MultiClusterResourceColle
 		
 		pods, err := multiCollector.GetTopMemoryRequestPods(c.Request.Context(), limit)
 		if err != nil {
-			log.Printf("获取Top内存请求Pod失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("获取Top内存请求Pod失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 		
-		c.JSON(http.StatusOK, gin.H{
+		response.OkWithData(gin.H{
 			"data":  pods,
 			"count": len(pods),
 			"limit": limit,
-		})
+		}, c)
 	}
 }
 
@@ -396,18 +352,16 @@ func getTopCPURequestPods(multiCollector *collector.MultiClusterResourceCollecto
 		
 		pods, err := multiCollector.GetTopCPURequestPods(c.Request.Context(), limit)
 		if err != nil {
-			log.Printf("获取Top CPU请求Pod失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("获取Top CPU请求Pod失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 		
-		c.JSON(http.StatusOK, gin.H{
+		response.OkWithData(gin.H{
 			"data":  pods,
 			"count": len(pods),
 			"limit": limit,
-		})
+		}, c)
 	}
 }
 
@@ -415,17 +369,15 @@ func getNamespacesSummary(multiCollector *collector.MultiClusterResourceCollecto
 	return func(c *gin.Context) {
 		summaries, err := multiCollector.GetNamespacesSummary(c.Request.Context())
 		if err != nil {
-			log.Printf("获取命名空间汇总失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("获取命名空间汇总失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 		
-		c.JSON(http.StatusOK, gin.H{
+		response.OkWithData(gin.H{
 			"data":  summaries,
 			"count": len(summaries),
-		})
+		}, c)
 	}
 }
 
@@ -434,10 +386,8 @@ func getAllNamespaces(multiCollector *collector.MultiClusterResourceCollector) g
 	return func(c *gin.Context) {
 		summaries, err := multiCollector.GetNamespacesSummary(c.Request.Context())
 		if err != nil {
-			log.Printf("获取命名空间列表失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("获取命名空间列表失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 		
@@ -452,10 +402,10 @@ func getAllNamespaces(multiCollector *collector.MultiClusterResourceCollector) g
 			}
 		}
 		
-		c.JSON(http.StatusOK, gin.H{
+		response.OkWithData(gin.H{
 			"data":  namespaces,
 			"count": len(namespaces),
-		})
+		}, c)
 	}
 }
 
@@ -463,26 +413,22 @@ func getNamespacePods(multiCollector *collector.MultiClusterResourceCollector) g
 	return func(c *gin.Context) {
 		namespace := c.Param("namespace")
 		if namespace == "" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "命名空间参数不能为空",
-			})
+			response.BadRequest("命名空间参数不能为空", c)
 			return
 		}
 		
 		pods, err := multiCollector.GetNamespacePods(c.Request.Context(), namespace)
 		if err != nil {
-			log.Printf("获取命名空间Pod失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("获取命名空间Pod失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 		
-		c.JSON(http.StatusOK, gin.H{
+		response.OkWithData(gin.H{
 			"data":      pods,
 			"count":     len(pods),
 			"namespace": namespace,
-		})
+		}, c)
 	}
 }
 
@@ -490,24 +436,20 @@ func getNamespaceTreeData(multiCollector *collector.MultiClusterResourceCollecto
 	return func(c *gin.Context) {
 		namespace := c.Param("namespace")
 		if namespace == "" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "命名空间参数不能为空",
-			})
+			response.BadRequest("命名空间参数不能为空", c)
 			return
 		}
 		
 		treeData, err := multiCollector.GetNamespaceTreeData(c.Request.Context(), namespace)
 		if err != nil {
-			log.Printf("获取命名空间树状数据失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("获取命名空间树状数据失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 		
-		c.JSON(http.StatusOK, gin.H{
+		response.OkWithData(gin.H{
 			"data": treeData,
-		})
+		}, c)
 	}
 }
 
@@ -516,9 +458,7 @@ func searchPods(multiCollector *collector.MultiClusterResourceCollector) gin.Han
 	return func(c *gin.Context) {
 		var req collector.PodSearchRequest
 		if err := c.ShouldBindQuery(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "请求参数格式错误: " + err.Error(),
-			})
+			response.BadRequest("请求参数格式错误: "+err.Error(), c)
 			return
 		}
 		
@@ -530,16 +470,14 @@ func searchPods(multiCollector *collector.MultiClusterResourceCollector) gin.Han
 			req.Size = 10
 		}
 		
-		response, err := multiCollector.SearchPods(c.Request.Context(), req)
+		podsResponse, err := multiCollector.SearchPods(c.Request.Context(), req)
 		if err != nil {
-			log.Printf("搜索Pod失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("搜索Pod失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 		
-		c.JSON(http.StatusOK, response)
+		response.OkWithData(podsResponse, c)
 	}
 }
 
@@ -563,16 +501,14 @@ func listPods(multiCollector *collector.MultiClusterResourceCollector) gin.Handl
 			Size: size,
 		}
 		
-		response, err := multiCollector.SearchPods(c.Request.Context(), req)
+		podsResponse, err := multiCollector.SearchPods(c.Request.Context(), req)
 		if err != nil {
-			log.Printf("获取Pod列表失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("获取Pod列表失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 		
-		c.JSON(http.StatusOK, response)
+		response.OkWithData(podsResponse, c)
 	}
 }
 
@@ -581,9 +517,7 @@ func queryHistoryData(historyService *service.HistoryService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req service.HistoryQueryRequest
 		if err := c.ShouldBindQuery(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "请求参数格式错误: " + err.Error(),
-			})
+			response.BadRequest("请求参数格式错误: "+err.Error(), c)
 			return
 		}
 
@@ -595,16 +529,14 @@ func queryHistoryData(historyService *service.HistoryService) gin.HandlerFunc {
 			req.Size = 20
 		}
 
-		response, err := historyService.QueryHistory(req)
+		historyResponse, err := historyService.QueryHistory(req)
 		if err != nil {
-			log.Printf("查询历史数据失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("查询历史数据失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusOK, response)
+		response.OkWithData(historyResponse, c)
 	}
 }
 
@@ -619,9 +551,7 @@ func getTrendData(historyService *service.HistoryService) gin.HandlerFunc {
 		if clusterIDStr != "" {
 			id, err := strconv.ParseUint(clusterIDStr, 10, 32)
 			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"error": "集群ID格式错误",
-				})
+				response.BadRequest("集群ID格式错误", c)
 				return
 			}
 			clusterID = uint(id)
@@ -634,21 +564,19 @@ func getTrendData(historyService *service.HistoryService) gin.HandlerFunc {
 
 		data, err := historyService.GetTrendData(clusterID, namespace, podName, hours)
 		if err != nil {
-			log.Printf("获取趋势数据失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("获取趋势数据失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		response.OkWithData(gin.H{
 			"data":       data,
 			"cluster_id": clusterID,
 			"namespace":  namespace,
 			"pod_name":   podName,
 			"hours":      hours,
 			"count":      len(data),
-		})
+		}, c)
 	}
 }
 
@@ -656,16 +584,14 @@ func getHistoryStatistics(historyService *service.HistoryService) gin.HandlerFun
 	return func(c *gin.Context) {
 		stats, err := historyService.GetStatistics()
 		if err != nil {
-			log.Printf("获取历史数据统计失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("获取历史数据统计失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		response.OkWithData(gin.H{
 			"data": stats,
-		})
+		}, c)
 	}
 }
 
@@ -676,18 +602,12 @@ func triggerDataCollection(multiCollector *collector.MultiClusterResourceCollect
 
 		result, err := multiCollector.CollectAllClustersDataWithPersistence(c.Request.Context(), enablePersistence)
 		if err != nil {
-			log.Printf("触发数据收集失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("触发数据收集失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"message":     "数据收集完成",
-			"persistence": enablePersistence,
-			"result":      result,
-		})
+		response.OkWithDetailed(result, "数据收集完成", c)
 	}
 }
 
@@ -701,17 +621,15 @@ func cleanupOldData(historyService *service.HistoryService) gin.HandlerFunc {
 
 		err = historyService.CleanupOldData(c.Request.Context(), retentionDays)
 		if err != nil {
-			log.Printf("清理过期数据失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("清理过期数据失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		response.OkWithData(gin.H{
 			"message":        "数据清理完成",
 			"retention_days": retentionDays,
-		})
+		}, c)
 	}
 }
 
@@ -719,9 +637,9 @@ func cleanupOldData(historyService *service.HistoryService) gin.HandlerFunc {
 func getScheduleStatus(scheduleService *service.ScheduleService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		status := scheduleService.GetStatus()
-		c.JSON(http.StatusOK, gin.H{
+		response.OkWithData(gin.H{
 			"data": status,
-		})
+		}, c)
 	}
 }
 
@@ -729,16 +647,12 @@ func startScheduleService(scheduleService *service.ScheduleService) gin.HandlerF
 	return func(c *gin.Context) {
 		err := scheduleService.Start(c.Request.Context())
 		if err != nil {
-			log.Printf("启动调度服务失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("启动调度服务失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"message": "调度服务启动成功",
-		})
+		response.OkWithMessage("调度服务启动成功", c)
 	}
 }
 
@@ -746,26 +660,22 @@ func stopScheduleService(scheduleService *service.ScheduleService) gin.HandlerFu
 	return func(c *gin.Context) {
 		err := scheduleService.Stop()
 		if err != nil {
-			log.Printf("停止调度服务失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("停止调度服务失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"message": "调度服务停止成功",
-		})
+		response.OkWithMessage("调度服务停止成功", c)
 	}
 }
 
 func getScheduleJobs(scheduleService *service.ScheduleService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		jobs := scheduleService.GetAllJobs()
-		c.JSON(http.StatusOK, gin.H{
+		response.OkWithData(gin.H{
 			"data":  jobs,
 			"count": len(jobs),
-		})
+		}, c)
 	}
 }
 
@@ -774,24 +684,18 @@ func restartClusterJob(scheduleService *service.ScheduleService) gin.HandlerFunc
 		clusterIDStr := c.Param("cluster_id")
 		clusterID, err := strconv.ParseUint(clusterIDStr, 10, 32)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "无效的集群ID",
-			})
+			response.BadRequest("无效的集群ID", c)
 			return
 		}
 
 		err = scheduleService.RestartJob(uint(clusterID))
 		if err != nil {
-			log.Printf("重启集群任务失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("重启集群任务失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"message": "集群任务重启成功",
-		})
+		response.OkWithMessage("集群任务重启成功", c)
 	}
 }
 
@@ -799,24 +703,17 @@ func updateScheduleSettings(scheduleService *service.ScheduleService) gin.Handle
 	return func(c *gin.Context) {
 		var settings service.GlobalScheduleSettings
 		if err := c.ShouldBindJSON(&settings); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "请求参数格式错误: " + err.Error(),
-			})
+			response.BadRequest("请求参数格式错误: "+err.Error(), c)
 			return
 		}
 
 		err := scheduleService.UpdateSettings(&settings)
 		if err != nil {
-			log.Printf("更新调度设置失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			logger.Error("更新调度设置失败: %v", err)
+			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"message": "调度设置更新成功",
-			"data":    settings,
-		})
+		response.OkWithDetailed(settings, "调度设置更新成功", c)
 	}
 }
