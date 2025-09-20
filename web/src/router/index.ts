@@ -1,40 +1,52 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import Home from '@/views/Home.vue'
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHistory(),
   routes: [
     {
       path: '/',
-      name: 'home',
-      component: Home
+      name: 'Dashboard',
+      component: () => import('../views/Dashboard.vue'),
+      meta: { title: '总览' }
     },
     {
       path: '/clusters',
-      name: 'clusters',
-      component: () => import('@/views/Clusters.vue')
-    },
-    {
-      path: '/analysis',
-      name: 'analysis',
-      component: () => import('@/views/Analysis.vue')
+      name: 'Clusters',
+      component: () => import('../views/Clusters.vue'),
+      meta: { title: '集群管理' }
     },
     {
       path: '/pods',
-      name: 'pods',
-      component: () => import('@/views/Pods.vue')
+      name: 'Pods',
+      component: () => import('../views/Pods.vue'),
+      meta: { title: 'Pod监控' }
     },
     {
-      path: '/schedule',
-      name: 'schedule',
-      component: () => import('@/views/Schedule.vue')
+      path: '/analysis',
+      name: 'Analysis',
+      component: () => import('../views/Analysis.vue'),
+      meta: { title: '资源分析' }
     },
     {
       path: '/history',
-      name: 'history',
-      component: () => import('@/views/History.vue')
+      name: 'History',
+      component: () => import('../views/History.vue'),
+      meta: { title: '历史数据' }
+    },
+    {
+      path: '/schedule',
+      name: 'Schedule',
+      component: () => import('../views/Schedule.vue'),
+      meta: { title: '调度管理' }
     }
   ]
+})
+
+// 路由守卫
+router.beforeEach((to, from, next) => {
+  // 设置页面标题
+  document.title = `${to.meta.title} - ClusterResourceInsight`
+  next()
 })
 
 export default router

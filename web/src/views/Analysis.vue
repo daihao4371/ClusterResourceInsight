@@ -1,699 +1,323 @@
 <template>
-  <div class="analysis-container">
-    <!-- 页面头部 -->
-    <div class="page-header">
-      <div class="header-left">
-        <h1>Pod资源分析</h1>
-        <p class="subtitle">分析集群中Pod的资源使用情况和配置合理性</p>
+  <div class="space-y-6 animate-fade-in">
+    <!-- 页面标题 -->
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold text-gradient">资源分析</h1>
+        <p class="text-gray-400 mt-1">深度分析集群资源配置与使用效率</p>
       </div>
-      <div class="header-actions">
-        <el-button type="primary" @click="refreshAnalysis" :loading="loading" :icon="Refresh">
+      
+      <div class="flex items-center space-x-3">
+        <button class="btn-secondary">
+          <RefreshCw class="w-4 h-4 mr-2" />
           刷新分析
-        </el-button>
-        <el-button @click="exportReport" :loading="exporting" :icon="Download">
+        </button>
+        <button class="btn-secondary">
+          <Download class="w-4 h-4 mr-2" />
           导出报告
-        </el-button>
+        </button>
       </div>
     </div>
 
-    <!-- 分析概览统计 -->
-    <el-row :gutter="20" class="analysis-stats">
-      <el-col :span="6">
-        <el-card class="stat-card">
-          <div class="stat-content">
-            <div class="stat-icon clusters-icon">
-              <el-icon><Setting /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ analysisData?.clusters_analyzed || 0 }}</div>
-              <div class="stat-label">分析集群</div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      
-      <el-col :span="6">
-        <el-card class="stat-card">
-          <div class="stat-content">
-            <div class="stat-icon pods-icon">
-              <el-icon><Box /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ analysisData?.total_pods || 0 }}</div>
-              <div class="stat-label">总Pod数</div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      
-      <el-col :span="6">
-        <el-card class="stat-card">
-          <div class="stat-content">
-            <div class="stat-icon problems-icon">
-              <el-icon><Warning /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ analysisData?.unreasonable_pods || 0 }}</div>
-              <div class="stat-label">问题Pod</div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      
-      <el-col :span="6">
-        <el-card class="stat-card">
-          <div class="stat-content">
-            <div class="stat-icon health-icon">
-              <el-icon><PieChart /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ healthRatio }}%</div>
-              <div class="stat-label">健康比例</div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+    <!-- 分析概览 -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <MetricCard
+        title="总Pod数量"
+        :value="analysisData?.total_pods || 0"
+        icon="Box"
+        status="info"
+      />
+      <MetricCard
+        title="异常配置Pod"
+        :value="analysisData?.unreasonable_pods || 0"
+        icon="AlertTriangle"
+        status="warning"
+      />
+      <MetricCard
+        title="资源利用率"
+        :value="resourceUtilization"
+        unit="%"
+        icon="Activity"
+        :status="resourceUtilization > 70 ? 'success' : 'warning'"
+      />
+      <MetricCard
+        title="优化潜力"
+        :value="optimizationPotential"
+        unit="%"
+        icon="TrendingUp"
+        status="success"
+      />
+    </div>
 
-    <!-- 筛选和搜索 -->
-    <el-card class="filter-card">
-      <div class="filter-section">
-        <div class="filter-group">
-          <label>集群筛选:</label>
-          <el-select v-model="filters.cluster" placeholder="全部集群" clearable @change="applyFilters">
-            <el-option label="全部集群" value="" />
-            <el-option 
-              v-for="cluster in clusters" 
-              :key="cluster"
-              :label="cluster" 
-              :value="cluster" 
-            />
-          </el-select>
-        </div>
-        
-        <div class="filter-group">
-          <label>命名空间:</label>
-          <el-select v-model="filters.namespace" placeholder="全部命名空间" clearable @change="applyFilters">
-            <el-option label="全部命名空间" value="" />
-            <el-option 
-              v-for="ns in namespaces" 
-              :key="ns"
-              :label="ns" 
-              :value="ns" 
-            />
-          </el-select>
-        </div>
-        
-        <div class="filter-group">
-          <label>问题类型:</label>
-          <el-select v-model="filters.issueType" placeholder="全部问题" clearable @change="applyFilters">
-            <el-option label="全部问题" value="" />
-            <el-option label="内存利用率过低" value="内存利用率过低" />
-            <el-option label="CPU利用率过低" value="CPU利用率过低" />
-            <el-option label="资源配置缺失" value="资源配置缺失" />
-            <el-option label="配置差异过大" value="配置差异过大" />
-          </el-select>
-        </div>
-        
-        <div class="filter-group">
-          <el-input
-            v-model="filters.search"
-            placeholder="搜索Pod名称..."
-            :prefix-icon="Search"
-            clearable
-            @input="applyFilters"
-          />
+    <!-- 问题Pod Top 50 -->
+    <div class="glass-card">
+      <div class="p-6 border-b border-gray-700">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xl font-semibold">问题Pod Top 50</h2>
+          <div class="flex items-center space-x-3">
+            <select v-model="sortBy" class="input-field text-sm">
+              <option value="cpu_waste">CPU浪费</option>
+              <option value="memory_waste">内存浪费</option>
+              <option value="total_waste">总浪费</option>
+            </select>
+            <button class="btn-secondary text-sm">
+              <Filter class="w-4 h-4 mr-2" />
+              筛选
+            </button>
+          </div>
         </div>
       </div>
-    </el-card>
-
-    <!-- 问题Pod列表 -->
-    <el-card class="pods-table-card">
-      <template #header>
-        <div class="card-header">
-          <span>问题Pod列表 ({{ filteredPods.length }})</span>
-          <div class="table-actions">
-            <el-button size="small" @click="toggleAllDetails">
-              {{ showAllDetails ? '收起详情' : '展开详情' }}
-            </el-button>
-          </div>
-        </div>
-      </template>
-
-      <el-table
-        v-loading="loading"
-        :data="paginatedPods"
-        style="width: 100%"
-        empty-text="暂无问题Pod数据"
-        row-key="pod_name"
-        :expand-row-keys="showAllDetails ? filteredPods.map(p => p.pod_name) : []"
-      >
-        <el-table-column type="expand">
-          <template #default="{ row }">
-            <div class="pod-details">
-              <el-row :gutter="20">
-                <el-col :span="12">
-                  <div class="detail-section">
-                    <h4>内存使用情况</h4>
-                    <div class="resource-progress">
-                      <div class="progress-item">
-                        <span>请求利用率:</span>
-                        <el-progress 
-                          :percentage="Math.min(row.memory_req_pct, 100)"
-                          :status="row.memory_req_pct < 20 ? 'exception' : 'success'"
-                          :stroke-width="8"
-                        >
-                          <template #default>
-                            <span class="progress-text">{{ row.memory_req_pct.toFixed(1) }}%</span>
-                          </template>
-                        </el-progress>
-                      </div>
-                      <div class="progress-item">
-                        <span>限制利用率:</span>
-                        <el-progress 
-                          :percentage="Math.min(row.memory_limit_pct, 100)"
-                          :status="row.memory_limit_pct < 15 ? 'exception' : 'success'"
-                          :stroke-width="8"
-                        >
-                          <template #default>
-                            <span class="progress-text">{{ row.memory_limit_pct.toFixed(1) }}%</span>
-                          </template>
-                        </el-progress>
-                      </div>
+      
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead class="bg-dark-800/50">
+            <tr class="border-b border-gray-700">
+              <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">排名</th>
+              <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">Pod信息</th>
+              <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">配置问题</th>
+              <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">资源请求</th>
+              <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">实际使用</th>
+              <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">浪费程度</th>
+              <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">建议</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-700">
+            <tr
+              v-for="(pod, index) in sortedProblems"
+              :key="`${pod.cluster_name}-${pod.namespace}-${pod.name}`"
+              class="hover:bg-white/5 transition-colors"
+            >
+              <!-- 排名 -->
+              <td class="px-6 py-4">
+                <div class="flex items-center">
+                  <span 
+                    class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium"
+                    :class="getRankBadgeClass(index + 1)"
+                  >
+                    {{ index + 1 }}
+                  </span>
+                </div>
+              </td>
+              
+              <!-- Pod信息 -->
+              <td class="px-6 py-4">
+                <div>
+                  <div class="font-medium text-white">{{ pod.name }}</div>
+                  <div class="text-sm text-gray-400">{{ pod.namespace }}/{{ pod.cluster_name }}</div>
+                </div>
+              </td>
+              
+              <!-- 配置问题 -->
+              <td class="px-6 py-4">
+                <div class="space-y-1">
+                  <span 
+                    v-for="issue in pod.issues"
+                    :key="issue"
+                    class="inline-block px-2 py-1 text-xs rounded-full"
+                    :class="getIssueBadgeClass(issue)"
+                  >
+                    {{ getIssueText(issue) }}
+                  </span>
+                </div>
+              </td>
+              
+              <!-- 资源请求 -->
+              <td class="px-6 py-4">
+                <div class="text-sm space-y-1">
+                  <div>CPU: {{ pod.cpu_request || 'N/A' }}</div>
+                  <div>MEM: {{ pod.memory_request || 'N/A' }}</div>
+                </div>
+              </td>
+              
+              <!-- 实际使用 -->
+              <td class="px-6 py-4">
+                <div class="text-sm space-y-1">
+                  <div class="flex items-center space-x-2">
+                    <span>{{ pod.cpu_usage || 'N/A' }}</span>
+                    <div 
+                      v-if="pod.cpu_usage_percent"
+                      class="w-16 h-1.5 bg-dark-700 rounded-full overflow-hidden"
+                    >
+                      <div 
+                        class="h-full rounded-full transition-all"
+                        :class="getUsageBarClass(pod.cpu_usage_percent)"
+                        :style="{ width: `${Math.min(pod.cpu_usage_percent, 100)}%` }"
+                      ></div>
                     </div>
                   </div>
-                </el-col>
-                <el-col :span="12">
-                  <div class="detail-section">
-                    <h4>CPU使用情况</h4>
-                    <div class="resource-progress">
-                      <div class="progress-item">
-                        <span>请求利用率:</span>
-                        <el-progress 
-                          :percentage="Math.min(row.cpu_req_pct, 100)"
-                          :status="row.cpu_req_pct < 15 ? 'exception' : 'success'"
-                          :stroke-width="8"
-                        >
-                          <template #default>
-                            <span class="progress-text">{{ row.cpu_req_pct.toFixed(1) }}%</span>
-                          </template>
-                        </el-progress>
-                      </div>
-                      <div class="progress-item">
-                        <span>限制利用率:</span>
-                        <el-progress 
-                          :percentage="Math.min(row.cpu_limit_pct, 100)"
-                          :status="row.cpu_limit_pct < 10 ? 'exception' : 'success'"
-                          :stroke-width="8"
-                        >
-                          <template #default>
-                            <span class="progress-text">{{ row.cpu_limit_pct.toFixed(1) }}%</span>
-                          </template>
-                        </el-progress>
-                      </div>
+                  <div class="flex items-center space-x-2">
+                    <span>{{ pod.memory_usage || 'N/A' }}</span>
+                    <div 
+                      v-if="pod.memory_usage_percent"
+                      class="w-16 h-1.5 bg-dark-700 rounded-full overflow-hidden"
+                    >
+                      <div 
+                        class="h-full rounded-full transition-all"
+                        :class="getUsageBarClass(pod.memory_usage_percent)"
+                        :style="{ width: `${Math.min(pod.memory_usage_percent, 100)}%` }"
+                      ></div>
                     </div>
                   </div>
-                </el-col>
-              </el-row>
-            </div>
-          </template>
-        </el-table-column>
-        
-        <el-table-column prop="cluster_name" label="集群" width="100" />
-        
-        <el-table-column prop="namespace" label="命名空间" width="120" />
-        
-        <el-table-column prop="pod_name" label="Pod名称" width="200" show-overflow-tooltip />
-        
-        <el-table-column prop="node_name" label="节点" width="120" show-overflow-tooltip />
-        
-        <el-table-column label="内存使用" width="120" align="center">
-          <template #default="{ row }">
-            <div class="resource-info">
-              <div class="usage-text">{{ formatBytes(row.memory_usage) }}</div>
-              <div class="request-text">请求: {{ formatBytes(row.memory_request) }}</div>
-            </div>
-          </template>
-        </el-table-column>
-        
-        <el-table-column label="CPU使用" width="120" align="center">
-          <template #default="{ row }">
-            <div class="resource-info">
-              <div class="usage-text">{{ formatCPU(row.cpu_usage) }}</div>
-              <div class="request-text">请求: {{ formatCPU(row.cpu_request) }}</div>
-            </div>
-          </template>
-        </el-table-column>
-        
-        <el-table-column prop="status" label="状态" width="80" align="center">
-          <template #default="{ row }">
-            <el-tag :type="row.status === '合理' ? 'success' : 'danger'" size="small">
-              {{ row.status }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        
-        <el-table-column prop="issues" label="问题描述" min-width="200">
-          <template #default="{ row }">
-            <div class="issues-container">
-              <el-tag 
-                v-for="issue in row.issues" 
-                :key="issue"
-                type="warning" 
-                size="small"
-                class="issue-tag"
-              >
-                {{ issue }}
-              </el-tag>
-            </div>
-          </template>
-        </el-table-column>
-        
-        <el-table-column prop="creation_time" label="创建时间" width="160">
-          <template #default="{ row }">
-            {{ formatDate(row.creation_time) }}
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <!-- 分页 -->
-      <div class="pagination-container">
-        <el-pagination
-          v-model:current-page="pagination.currentPage"
-          v-model:page-size="pagination.pageSize"
-          :page-sizes="[10, 20, 50, 100]"
-          :total="filteredPods.length"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="handleSizeChange"
-          @current-change="handleCurrentChange"
-        />
+                </div>
+              </td>
+              
+              <!-- 浪费程度 -->
+              <td class="px-6 py-4">
+                <div class="text-sm space-y-1">
+                  <div 
+                    class="font-medium"
+                    :class="getWasteClass(calculateWaste(pod))"
+                  >
+                    {{ calculateWaste(pod) }}%
+                  </div>
+                  <div class="text-xs text-gray-500">资源浪费</div>
+                </div>
+              </td>
+              
+              <!-- 建议 -->
+              <td class="px-6 py-4">
+                <button class="btn-secondary text-sm">
+                  <Lightbulb class="w-4 h-4 mr-1" />
+                  优化建议
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-    </el-card>
+    </div>
+
+    <!-- 资源分布图表 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- CPU资源分布 -->
+      <div class="glass-card p-6">
+        <h3 class="text-lg font-semibold mb-4">CPU资源分布</h3>
+        <div class="h-64 flex items-center justify-center text-gray-500">
+          <BarChart3 class="w-12 h-12 mr-3" />
+          图表组件开发中...
+        </div>
+      </div>
+      
+      <!-- 内存资源分布 -->
+      <div class="glass-card p-6">
+        <h3 class="text-lg font-semibold mb-4">内存资源分布</h3>
+        <div class="h-64 flex items-center justify-center text-gray-500">
+          <PieChart class="w-12 h-12 mr-3" />
+          图表组件开发中...
+        </div>
+      </div>
+    </div>
+
+    <!-- 空状态 -->
+    <div v-if="!analysisData" class="text-center py-12">
+      <BarChart3 class="w-16 h-16 text-gray-600 mx-auto mb-4" />
+      <h3 class="text-lg font-semibold text-gray-400 mb-2">暂无分析数据</h3>
+      <p class="text-gray-500 mb-6">点击刷新按钮开始资源分析</p>
+      <button class="btn-primary">
+        <RefreshCw class="w-4 h-4 mr-2" />
+        开始分析
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import {
-  Refresh,
-  Download,
-  Search,
-  Setting,
+import { ref, computed, onMounted } from 'vue'
+import { 
+  RefreshCw, 
+  Download, 
+  Filter, 
+  Lightbulb,
+  BarChart3, 
+  PieChart,
   Box,
-  Warning,
-  PieChart
-} from '@element-plus/icons-vue'
-import { analysisApi } from '@/api'
-import type { AnalysisResult, PodResourceInfo } from '@/types'
+  AlertTriangle,
+  Activity,
+  TrendingUp
+} from 'lucide-vue-next'
+import MetricCard from '../components/common/MetricCard.vue'
+import { useAnalysis } from '../composables/api'
+import type { Pod } from '../types'
 
-// 响应式数据
-const loading = ref(false)
-const exporting = ref(false)
-const showAllDetails = ref(false)
+const { analysis: analysisData, loading, fetchAnalysis } = useAnalysis()
 
-const analysisData = ref<AnalysisResult | null>(null)
-const allPods = ref<PodResourceInfo[]>([])
-const filteredPods = ref<PodResourceInfo[]>([])
+const sortBy = ref('cpu_waste')
 
-// 筛选条件
-const filters = reactive({
-  cluster: '',
-  namespace: '',
-  issueType: '',
-  search: ''
+// 计算资源利用率
+const resourceUtilization = computed(() => {
+  if (!analysisData.value) return 0
+  const total = analysisData.value.total_pods
+  const problems = analysisData.value.unreasonable_pods
+  return total > 0 ? Math.round(((total - problems) / total) * 100) : 0
 })
 
-// 分页配置
-const pagination = reactive({
-  currentPage: 1,
-  pageSize: 20
+// 计算优化潜力
+const optimizationPotential = computed(() => {
+  if (!analysisData.value) return 0
+  return Math.min(100 - resourceUtilization.value, 30)
 })
 
-// 计算属性
-const healthRatio = computed(() => {
-  if (!analysisData.value || analysisData.value.total_pods === 0) return 100
-  const healthyPods = analysisData.value.total_pods - analysisData.value.unreasonable_pods
-  return Math.round((healthyPods / analysisData.value.total_pods) * 100)
-})
-
-const clusters = computed(() => {
-  const clusterSet = new Set(allPods.value.map(pod => pod.cluster_name))
-  return Array.from(clusterSet).sort()
-})
-
-const namespaces = computed(() => {
-  const nsSet = new Set(allPods.value.map(pod => pod.namespace))
-  return Array.from(nsSet).sort()
-})
-
-const paginatedPods = computed(() => {
-  const start = (pagination.currentPage - 1) * pagination.pageSize
-  const end = start + pagination.pageSize
-  return filteredPods.value.slice(start, end)
-})
-
-// 工具函数
-const formatBytes = (bytes: number): string => {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
-
-const formatCPU = (millicores: number): string => {
-  if (millicores >= 1000) {
-    return parseFloat((millicores / 1000).toFixed(2)) + ' 核'
-  }
-  return millicores + 'm'
-}
-
-const formatDate = (dateStr: string): string => {
-  return new Date(dateStr).toLocaleString('zh-CN')
-}
-
-// 业务逻辑函数
-const loadAnalysisData = async () => {
-  try {
-    loading.value = true
-    const result = await analysisApi.getAnalysis() as any // 分析API直接返回数据
-    
-    analysisData.value = result
-    allPods.value = result.top50_problems || []
-    applyFilters()
-    
-    ElMessage.success('分析数据加载完成')
-  } catch (error) {
-    console.error('加载分析数据失败:', error)
-    ElMessage.error('获取分析数据失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-const applyFilters = () => {
-  let filtered = [...allPods.value]
+// 排序后的问题Pod列表
+const sortedProblems = computed(() => {
+  if (!analysisData.value?.top_50_problems) return []
   
-  // 集群筛选
-  if (filters.cluster) {
-    filtered = filtered.filter(pod => pod.cluster_name === filters.cluster)
-  }
+  const pods = [...analysisData.value.top_50_problems]
   
-  // 命名空间筛选
-  if (filters.namespace) {
-    filtered = filtered.filter(pod => pod.namespace === filters.namespace)
-  }
+  return pods.sort((a, b) => {
+    const wasteA = calculateWaste(a)
+    const wasteB = calculateWaste(b)
+    return wasteB - wasteA
+  })
+})
+
+// 计算浪费程度
+const calculateWaste = (pod: Pod) => {
+  if (!pod.cpu_usage_percent && !pod.memory_usage_percent) return 0
   
-  // 问题类型筛选
-  if (filters.issueType) {
-    filtered = filtered.filter(pod => 
-      pod.issues.some(issue => issue.includes(filters.issueType))
-    )
-  }
+  const cpuWaste = pod.cpu_usage_percent ? 100 - pod.cpu_usage_percent : 0
+  const memoryWaste = pod.memory_usage_percent ? 100 - pod.memory_usage_percent : 0
   
-  // 搜索筛选
-  if (filters.search) {
-    const searchLower = filters.search.toLowerCase()
-    filtered = filtered.filter(pod =>
-      pod.pod_name.toLowerCase().includes(searchLower) ||
-      pod.node_name.toLowerCase().includes(searchLower)
-    )
+  return Math.round((cpuWaste + memoryWaste) / 2)
+}
+
+// 样式方法
+const getRankBadgeClass = (rank: number) => {
+  if (rank <= 3) return 'bg-danger-500/20 text-danger-400 border border-danger-500/30'
+  if (rank <= 10) return 'bg-warning-500/20 text-warning-400 border border-warning-500/30'
+  return 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
+}
+
+const getIssueBadgeClass = (issue: string) => {
+  if (issue.includes('over')) return 'bg-danger-500/20 text-danger-400'
+  if (issue.includes('under')) return 'bg-warning-500/20 text-warning-400'
+  return 'bg-primary-500/20 text-primary-400'
+}
+
+const getIssueText = (issue: string) => {
+  const issueMap: Record<string, string> = {
+    'cpu_over_request': 'CPU超配',
+    'memory_over_request': '内存超配',
+    'cpu_under_utilization': 'CPU利用率低',
+    'memory_under_utilization': '内存利用率低',
+    'no_limits': '无资源限制',
+    'no_requests': '无资源请求'
   }
-  
-  filteredPods.value = filtered
-  pagination.currentPage = 1  // 重置到第一页
+  return issueMap[issue] || issue
 }
 
-const refreshAnalysis = () => {
-  loadAnalysisData()
+const getUsageBarClass = (percentage: number) => {
+  if (percentage >= 80) return 'bg-danger-500'
+  if (percentage >= 60) return 'bg-warning-500'
+  return 'bg-success-500'
 }
 
-const exportReport = async () => {
-  try {
-    exporting.value = true
-    
-    // 创建CSV内容
-    const headers = [
-      '集群', '命名空间', 'Pod名称', '节点名称',
-      '内存使用(MB)', '内存请求(MB)', '内存利用率(%)',
-      'CPU使用(m)', 'CPU请求(m)', 'CPU利用率(%)',
-      '状态', '问题描述', '创建时间'
-    ]
-    
-    const rows = filteredPods.value.map(pod => [
-      pod.cluster_name,
-      pod.namespace,
-      pod.pod_name,
-      pod.node_name,
-      Math.round(pod.memory_usage / 1024 / 1024),
-      Math.round(pod.memory_request / 1024 / 1024),
-      pod.memory_req_pct.toFixed(1),
-      pod.cpu_usage,
-      pod.cpu_request,
-      pod.cpu_req_pct.toFixed(1),
-      pod.status,
-      pod.issues.join(';'),
-      formatDate(pod.creation_time)
-    ])
-    
-    const csvContent = [headers, ...rows]
-      .map(row => row.map(cell => `"${cell}"`).join(','))
-      .join('\n')
-    
-    // 创建下载链接
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8' })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `pod-analysis-report-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.csv`
-    link.click()
-    
-    window.URL.revokeObjectURL(url)
-    ElMessage.success('报告导出成功')
-  } catch (error) {
-    console.error('导出报告失败:', error)
-    ElMessage.error('导出报告失败')
-  } finally {
-    exporting.value = false
-  }
+const getWasteClass = (waste: number) => {
+  if (waste >= 50) return 'text-danger-400'
+  if (waste >= 30) return 'text-warning-400'
+  return 'text-success-400'
 }
 
-const toggleAllDetails = () => {
-  showAllDetails.value = !showAllDetails.value
-}
-
-const handleSizeChange = (size: number) => {
-  pagination.pageSize = size
-  pagination.currentPage = 1
-}
-
-const handleCurrentChange = (page: number) => {
-  pagination.currentPage = page
-}
-
-// 组件挂载时加载数据
 onMounted(() => {
-  loadAnalysisData()
+  fetchAnalysis()
 })
 </script>
-
-<style scoped>
-.analysis-container {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 20px;
-}
-
-.header-left h1 {
-  margin: 0 0 4px 0;
-  color: #303133;
-}
-
-.subtitle {
-  margin: 0;
-  color: #909399;
-  font-size: 14px;
-}
-
-.header-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.analysis-stats {
-  margin-bottom: 20px;
-}
-
-.stat-card .stat-content {
-  display: flex;
-  align-items: center;
-  padding: 20px;
-}
-
-.stat-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 16px;
-  font-size: 24px;
-  color: white;
-}
-
-.clusters-icon {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.pods-icon {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-}
-
-.problems-icon {
-  background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
-}
-
-.health-icon {
-  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-}
-
-.stat-info {
-  flex: 1;
-}
-
-.stat-value {
-  font-size: 28px;
-  font-weight: bold;
-  color: #303133;
-  line-height: 1;
-}
-
-.stat-label {
-  color: #909399;
-  font-size: 14px;
-  margin-top: 4px;
-}
-
-.filter-card {
-  margin-bottom: 20px;
-}
-
-.filter-section {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  align-items: center;
-}
-
-.filter-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.filter-group label {
-  font-size: 14px;
-  color: #606266;
-  white-space: nowrap;
-}
-
-.filter-group .el-select,
-.filter-group .el-input {
-  width: 160px;
-}
-
-.pods-table-card {
-  margin-bottom: 20px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: bold;
-}
-
-.table-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.resource-info {
-  text-align: center;
-}
-
-.usage-text {
-  font-weight: bold;
-  color: #303133;
-}
-
-.request-text {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 2px;
-}
-
-.issues-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.issue-tag {
-  margin-bottom: 2px;
-}
-
-.pod-details {
-  padding: 20px;
-  background-color: #f8f9fa;
-  border-radius: 4px;
-  margin: 10px 0;
-}
-
-.detail-section h4 {
-  color: #303133;
-  margin: 0 0 15px 0;
-  font-size: 16px;
-}
-
-.resource-progress {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.progress-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.progress-item span:first-child {
-  width: 80px;
-  font-size: 14px;
-  color: #606266;
-}
-
-.progress-item .el-progress {
-  flex: 1;
-}
-
-.progress-text {
-  font-size: 12px;
-  color: #606266;
-}
-
-.pagination-container {
-  display: flex;
-  justify-content: center;
-  margin-top: 20px;
-}
-</style>
