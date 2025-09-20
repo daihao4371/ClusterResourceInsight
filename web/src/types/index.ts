@@ -77,21 +77,23 @@ export interface ClusterTestResult {
 
 // Pod 相关类型
 export interface Pod {
-  name: string
+  pod_name: string  // 修正字段名，与后端API保持一致
   namespace: string
   cluster_name: string
   node_name: string
   status: string
-  cpu_request: string
-  cpu_limit: string
-  memory_request: string
-  memory_limit: string
-  cpu_usage?: string
-  memory_usage?: string
-  cpu_usage_percent?: number
-  memory_usage_percent?: number
+  cpu_request: number   // 使用数字类型存储millicores
+  cpu_limit: number
+  memory_request: number // 使用数字类型存储bytes
+  memory_limit: number
+  cpu_usage: number
+  memory_usage: number
+  cpu_req_pct?: number   // CPU请求利用率百分比
+  cpu_limit_pct?: number // CPU限制利用率百分比
+  memory_req_pct?: number // 内存请求利用率百分比
+  memory_limit_pct?: number // 内存限制利用率百分比
   issues: string[]
-  created_at: string
+  creation_time: string
 }
 
 export interface PodSearchRequest {
@@ -132,13 +134,9 @@ export interface NamespaceSummary {
 export interface ResourceAnalysis {
   total_pods: number
   unreasonable_pods: number
-  top_50_problems: Pod[]
-  analysis_time: string
-  cluster_summary: {
-    total_clusters: number
-    online_clusters: number
-    offline_clusters: number
-  }
+  top50_problems: Pod[]  // 修正字段名
+  generated_at: string   // 修正字段名
+  clusters_analyzed: number // 新增字段
 }
 
 // 历史数据类型

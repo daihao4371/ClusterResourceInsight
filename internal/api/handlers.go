@@ -1,6 +1,8 @@
 package api
 
 import (
+	"math"
+	"sort"
 	"strconv"
 
 	"cluster-resource-insight/internal/collector"
@@ -34,11 +36,12 @@ func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollec
 		namespacesGroup.GET("/:namespace/tree-data", getNamespaceTreeData(multiCollector))
 	}
 
-	// 新增的Pod搜索与分页接口
+	// Pod搜索与分页接口
 	podsGroup := r.Group("/pods")
 	{
 		podsGroup.GET("/search", searchPods(multiCollector))
 		podsGroup.GET("/list", listPods(multiCollector))
+		podsGroup.GET("/problems", getProblemsWithPagination(multiCollector)) // 新增问题Pod分页接口
 	}
 
 	// 新增的历史数据接口
@@ -253,15 +256,86 @@ func batchTestAllClusters(clusterService *service.ClusterService) gin.HandlerFun
 func getResourceAnalysis(resourceCollector *collector.ResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger.Info("Starting resource analysis...")
-		result, err := resourceCollector.CollectAllPodsData(c.Request.Context())
+		
+		// 获取分页参数
+		pageStr := c.DefaultQuery("page", "1")
+		sizeStr := c.DefaultQuery("size", "50")
+		clusterName := c.Query("cluster_name")
+		
+		page, err := strconv.Atoi(pageStr)
+		if err != nil || page <= 0 {
+			page = 1
+		}
+		
+		size, err := strconv.Atoi(sizeStr)
+		if err != nil || size <= 0 {
+			size = 50
+		}
+		
+		// 使用多集群收集器获取数据
+		multiCollector := collector.NewMultiClusterResourceCollector()
+		result, err := multiCollector.CollectAllClustersData(c.Request.Context())
 		if err != nil {
 			logger.Error("Error in resource analysis: %v", err)
 			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		logger.Info("Analysis complete: total_pods=%d, unreasonable_pods=%d", result.TotalPods, result.UnreasonablePods)
-		response.OkWithData(result, c)
+		// 应用集群筛选
+		var filteredProblems []collector.PodResourceInfo
+		if clusterName != "" {
+			for _, pod := range result.Top50Problems {
+				if pod.ClusterName == clusterName {
+					filteredProblems = append(filteredProblems, pod)
+				}
+			}
+		} else {
+			filteredProblems = result.Top50Problems
+		}
+
+		// 应用分页
+		total := len(filteredProblems)
+		start := (page - 1) * size
+		end := start + size
+
+		if start > total {
+			start = total
+		}
+		if end > total {
+			end = total
+		}
+
+		var pagedProblems []collector.PodResourceInfo
+		if start < end {
+			pagedProblems = filteredProblems[start:end]
+		}
+
+		// 构造分页响应
+		pagedResult := &collector.AnalysisResult{
+			TotalPods:        result.TotalPods,
+			UnreasonablePods: result.UnreasonablePods,
+			Top50Problems:    pagedProblems,
+			GeneratedAt:      result.GeneratedAt,
+			ClustersAnalyzed: result.ClustersAnalyzed,
+		}
+
+		logger.Info("Analysis complete: total_pods=%d, unreasonable_pods=%d, page=%d, size=%d, cluster=%s", 
+			result.TotalPods, result.UnreasonablePods, page, size, clusterName)
+		
+		response.OkWithData(gin.H{
+			"data": pagedResult,
+			"pagination": gin.H{
+				"page":        page,
+				"size":        size,
+				"total":       total,
+				"total_pages": (total + size - 1) / size,
+				"has_next":    end < total,
+				"has_prev":    page > 1,
+			},
+			"filter": gin.H{
+				"cluster_name": clusterName,
+			},
+		}, c)
 	}
 }
 
@@ -716,4 +790,130 @@ func updateScheduleSettings(scheduleService *service.ScheduleService) gin.Handle
 
 		response.OkWithDetailed(settings, "调度设置更新成功", c)
 	}
+}
+
+// 问题Pod分页接口
+func getProblemsWithPagination(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 获取分页参数
+		pageStr := c.DefaultQuery("page", "1")
+		sizeStr := c.DefaultQuery("size", "10")
+		clusterName := c.Query("cluster_name")
+		sortBy := c.DefaultQuery("sort_by", "total_waste")
+		
+		page, err := strconv.Atoi(pageStr)
+		if err != nil || page <= 0 {
+			page = 1
+		}
+		
+		size, err := strconv.Atoi(sizeStr)
+		if err != nil || size <= 0 || size > 100 { // 限制最大每页数量
+			size = 10
+		}
+		
+		// 获取所有问题Pod数据
+		result, err := multiCollector.CollectAllClustersData(c.Request.Context())
+		if err != nil {
+			logger.Error("获取问题Pod数据失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+
+		// 应用集群筛选
+		var filteredProblems []collector.PodResourceInfo
+		if clusterName != "" {
+			for _, pod := range result.Top50Problems {
+				if pod.ClusterName == clusterName {
+					filteredProblems = append(filteredProblems, pod)
+				}
+			}
+		} else {
+			filteredProblems = result.Top50Problems
+		}
+
+		// 应用排序
+		sortProblems(filteredProblems, sortBy)
+
+		// 应用分页
+		total := len(filteredProblems)
+		totalPages := (total + size - 1) / size
+		start := (page - 1) * size
+		end := start + size
+
+		if start > total {
+			start = total
+		}
+		if end > total {
+			end = total
+		}
+
+		var pagedProblems []collector.PodResourceInfo
+		if start < end {
+			pagedProblems = filteredProblems[start:end]
+		}
+
+		logger.Info("问题Pod分页查询完成: total=%d, page=%d, size=%d, cluster=%s, sort=%s", 
+			total, page, size, clusterName, sortBy)
+		
+		response.OkWithData(gin.H{
+			"pods":       pagedProblems,
+			"total":      total,
+			"page":       page,
+			"size":       size,
+			"total_pages": totalPages,
+			"has_next":   end < total,
+			"has_prev":   page > 1,
+			"cluster_name": clusterName,
+			"sort_by":    sortBy,
+		}, c)
+	}
+}
+
+// 对问题Pod进行排序
+func sortProblems(problems []collector.PodResourceInfo, sortBy string) {
+	switch sortBy {
+	case "cpu_waste":
+		sort.Slice(problems, func(i, j int) bool {
+			cpuWasteI := calculateCPUWaste(problems[i])
+			cpuWasteJ := calculateCPUWaste(problems[j])
+			return cpuWasteI > cpuWasteJ
+		})
+	case "memory_waste":
+		sort.Slice(problems, func(i, j int) bool {
+			memoryWasteI := calculateMemoryWaste(problems[i])
+			memoryWasteJ := calculateMemoryWaste(problems[j])
+			return memoryWasteI > memoryWasteJ
+		})
+	case "total_waste":
+		fallthrough
+	default:
+		sort.Slice(problems, func(i, j int) bool {
+			totalWasteI := calculateTotalWaste(problems[i])
+			totalWasteJ := calculateTotalWaste(problems[j])
+			return totalWasteI > totalWasteJ
+		})
+	}
+}
+
+// 计算CPU浪费程度
+func calculateCPUWaste(pod collector.PodResourceInfo) float64 {
+	if pod.CPUReqPct <= 0 {
+		return 0
+	}
+	return math.Max(0, 100-pod.CPUReqPct)
+}
+
+// 计算内存浪费程度
+func calculateMemoryWaste(pod collector.PodResourceInfo) float64 {
+	if pod.MemoryReqPct <= 0 {
+		return 0
+	}
+	return math.Max(0, 100-pod.MemoryReqPct)
+}
+
+// 计算总浪费程度
+func calculateTotalWaste(pod collector.PodResourceInfo) float64 {
+	cpuWaste := calculateCPUWaste(pod)
+	memoryWaste := calculateMemoryWaste(pod)
+	return (cpuWaste + memoryWaste) / 2
 }
