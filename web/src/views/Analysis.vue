@@ -1,10 +1,10 @@
 <template>
-  <div class="space-y-6 animate-fade-in">
+  <div class="space-y-4 animate-fade-in">
     <!-- 页面标题 -->
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-3xl font-bold text-gradient">资源分析</h1>
-        <p class="text-gray-400 mt-1">深度分析集群资源配置与使用效率</p>
+        <h1 class="text-2xl font-bold text-gradient">资源分析</h1>
+        <p class="text-gray-400 text-sm">深度分析集群资源配置与使用效率</p>
       </div>
       
       <div class="flex items-center space-x-3">

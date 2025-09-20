@@ -1,10 +1,10 @@
 <template>
-  <div class="space-y-6 animate-fade-in">
+  <div class="space-y-4 animate-fade-in">
     <!-- 页面标题和操作 -->
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-3xl font-bold text-gradient">Pod监控</h1>
-        <p class="text-gray-400 mt-1">实时监控所有Pod状态和资源使用情况</p>
+        <h1 class="text-2xl font-bold text-gradient">Pod监控</h1>
+        <p class="text-gray-400 text-sm">实时监控所有Pod状态和资源使用情况</p>
       </div>
       
       <div class="flex items-center space-x-3">

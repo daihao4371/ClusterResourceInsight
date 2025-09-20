@@ -1,10 +1,10 @@
 <template>
-  <div class="space-y-6 animate-fade-in">
+  <div class="space-y-4 animate-fade-in">
     <!-- 页面标题 -->
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-3xl font-bold text-gradient">调度管理</h1>
-        <p class="text-gray-400 mt-1">管理集群数据收集调度任务</p>
+        <h1 class="text-2xl font-bold text-gradient">调度管理</h1>
+        <p class="text-gray-400 text-sm">管理集群数据收集调度任务</p>
       </div>
       
       <div class="flex items-center space-x-3">

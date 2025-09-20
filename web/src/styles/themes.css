@@ -1,0 +1,424 @@
+/* 主题颜色变量系统 */
+:root {
+  /* 默认深色主题（当前使用的颜色） */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --border-color: #374151;
+  --accent-primary: #3b82f6;
+  --accent-secondary: #06b6d4;
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --error-color: #ef4444;
+}
+
+/* 浅色主题变量（白天模式） */
+:root[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #e2e8f0;
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --border-color: #e2e8f0;
+  --accent-primary: #3b82f6;
+  --accent-secondary: #06b6d4;
+  --success-color: #059669;
+  --warning-color: #d97706;
+  --error-color: #dc2626;
+}
+
+/* 深色主题变量（夜晚模式） */
+:root[data-theme="dark"] {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --border-color: #374151;
+  --accent-primary: #3b82f6;
+  --accent-secondary: #06b6d4;
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --error-color: #ef4444;
+}
+
+/* 基于系统偏好的自动切换（当未手动设置主题时） */
+:root[data-theme="auto"] {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --border-color: #374151;
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8fafc;
+    --bg-tertiary: #e2e8f0;
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --border-color: #e2e8f0;
+  }
+}
+
+/* 全局应用主题变量 */
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* 确保根容器继承背景色 */
+#app, .min-h-screen {
+  background-color: var(--bg-primary);
+  transition: background-color 0.3s ease;
+}
+
+/* 玻璃卡片效果适配主题 */
+.glass-card {
+  background-color: var(--bg-secondary);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border-color);
+  transition: all 0.3s ease;
+}
+
+:root[data-theme="light"] .glass-card {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* 输入框样式适配 */
+.input-field {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  transition: all 0.3s ease;
+}
+
+.input-field:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* 按钮样式适配 */
+.btn-primary {
+  background-color: var(--accent-primary);
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-tertiary);
+}
+
+/* 文字颜色类 */
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-muted { color: var(--text-muted); }
+
+/* 背景颜色类 */
+.bg-primary { background-color: var(--bg-primary); }
+.bg-secondary { background-color: var(--bg-secondary); }
+.bg-tertiary { background-color: var(--bg-tertiary); }
+
+/* 重写固定的灰色系类以支持主题 */
+.text-gray-300 { color: var(--text-secondary); }
+.text-gray-400 { color: var(--text-secondary); }
+.text-gray-500 { color: var(--text-muted); }
+.text-gray-600 { color: var(--text-muted); }
+
+.bg-dark-500 { background-color: var(--text-muted); }
+.bg-dark-600 { background-color: var(--border-color); }
+.bg-dark-700 { background-color: var(--bg-tertiary); }
+.bg-dark-800 { background-color: var(--bg-secondary); }
+
+.bg-dark-800\/30 { 
+  background-color: var(--bg-tertiary); 
+  opacity: 0.7;
+}
+
+.bg-dark-800\/50 { 
+  background-color: var(--bg-tertiary); 
+  opacity: 0.8;
+}
+
+.border-gray-700 { 
+  border-color: var(--border-color); 
+}
+
+/* 重写白色透明度边框类 */
+.border-white\/10 { 
+  border-color: var(--border-color);
+}
+
+.border-white\/20 { 
+  border-color: var(--border-color);
+}
+
+/* 重写白色透明度背景类 */
+.bg-white\/5 {
+  background-color: var(--bg-tertiary);
+  opacity: 0.5;
+}
+
+.bg-white\/10 {
+  background-color: var(--bg-tertiary);
+  opacity: 0.7;
+}
+
+.bg-white\/20 {
+  background-color: var(--bg-tertiary);
+  opacity: 0.8;
+}
+
+/* 组件交互状态适配 */
+.group-hover\:bg-dark-500:hover {
+  background-color: var(--text-muted);
+}
+
+.group-hover\:bg-dark-600:hover {
+  background-color: var(--border-color);
+}
+
+/* 表格相关样式适配 */
+.hover\:bg-white\/5:hover {
+  background-color: var(--bg-tertiary);
+  opacity: 0.5;
+}
+
+.hover\:bg-white\/10:hover {
+  background-color: var(--bg-tertiary);
+  opacity: 0.7;
+}
+
+.hover\:bg-white\/20:hover {
+  background-color: var(--bg-tertiary);
+  opacity: 0.8;
+}
+
+/* 分页按钮样式适配 */
+.hover\:bg-dark-600:hover {
+  background-color: var(--bg-tertiary);
+}
+
+/* 表格专用样式覆盖 */
+table thead {
+  background-color: var(--bg-tertiary) !important;
+}
+
+table th {
+  color: var(--text-secondary) !important;
+  border-color: var(--border-color) !important;
+}
+
+table tbody {
+  background-color: var(--bg-secondary);
+}
+
+table td {
+  color: var(--text-primary);
+  border-color: var(--border-color) !important;
+}
+
+table tr:hover {
+  background-color: var(--bg-tertiary) !important;
+}
+
+/* 边框样式覆盖 */
+.border-gray-700 {
+  border-color: var(--border-color) !important;
+}
+
+.divide-gray-700 > * + * {
+  border-color: var(--border-color) !important;
+}
+
+/* 表格背景覆盖 */
+.bg-dark-800\/50 {
+  background-color: var(--bg-tertiary) !important;
+  opacity: 0.8;
+}
+
+.bg-dark-800\/30 {
+  background-color: var(--bg-tertiary) !important;
+  opacity: 0.6;
+}
+
+/* 浅色主题的特殊表格样式 */
+:root[data-theme="light"] table thead {
+  background-color: #f1f5f9 !important;
+}
+
+:root[data-theme="light"] table th {
+  color: #334155 !important;
+}
+
+/* 浅色主题下的文本颜色覆盖 */
+:root[data-theme="light"] .text-gray-400 {
+  color: #64748b !important;
+}
+
+:root[data-theme="light"] .text-gray-500 {
+  color: #475569 !important;
+}
+
+:root[data-theme="light"] .text-gray-300 {
+  color: #64748b !important;
+}
+
+:root[data-theme="light"] .text-gray-600 {
+  color: #374151 !important;
+}
+
+/* 浅色主题下的白色文本覆盖 */
+:root[data-theme="light"] .text-white {
+  color: #1e293b !important;
+}
+
+/* 浅色主题下的表格内容适配 */
+:root[data-theme="light"] table tbody td {
+  color: #1e293b !important;
+}
+
+:root[data-theme="light"] table tbody .text-white {
+  color: #1e293b !important;
+}
+
+:root[data-theme="light"] table tbody .text-gray-300 {
+  color: #64748b !important;
+}
+
+:root[data-theme="light"] table tbody .text-gray-400 {
+  color: #64748b !important;
+}
+
+:root[data-theme="light"] table tbody .text-gray-500 {
+  color: #475569 !important;
+}
+
+/* 自动主题在浅色模式下的表格样式 */
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] table thead {
+    background-color: #f1f5f9 !important;
+  }
+  
+  :root[data-theme="auto"] table th {
+    color: #334155 !important;
+  }
+  
+  /* 自动主题浅色模式下的文本颜色覆盖 */
+  :root[data-theme="auto"] .text-gray-400 {
+    color: #64748b !important;
+  }
+  
+  :root[data-theme="auto"] .text-gray-500 {
+    color: #475569 !important;
+  }
+  
+  :root[data-theme="auto"] .text-gray-300 {
+    color: #64748b !important;
+  }
+  
+  :root[data-theme="auto"] .text-gray-600 {
+    color: #374151 !important;
+  }
+  
+  /* 自动主题浅色模式下的白色文本覆盖 */
+  :root[data-theme="auto"] .text-white {
+    color: #1e293b !important;
+  }
+  
+  /* 自动主题浅色模式下的表格内容适配 */
+  :root[data-theme="auto"] table tbody td {
+    color: #1e293b !important;
+  }
+  
+  :root[data-theme="auto"] table tbody .text-white {
+    color: #1e293b !important;
+  }
+  
+  :root[data-theme="auto"] table tbody .text-gray-300 {
+    color: #64748b !important;
+  }
+  
+  :root[data-theme="auto"] table tbody .text-gray-400 {
+    color: #64748b !important;
+  }
+  
+  :root[data-theme="auto"] table tbody .text-gray-500 {
+    color: #475569 !important;
+  }
+}
+
+/* 重写更多固定颜色类 */
+.text-gray-300 { color: var(--text-secondary); }
+.text-gray-400 { color: var(--text-secondary); }
+.text-gray-500 { color: var(--text-muted); }
+.text-gray-600 { color: var(--text-muted); }
+
+/* 白色文本在浅色主题下的通用覆盖 */
+:root[data-theme="light"] .text-white {
+  color: #1e293b !important;
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] .text-white {
+    color: #1e293b !important;
+  }
+}
+
+.bg-primary-500 { background-color: var(--accent-primary); }
+.bg-primary-600 { background-color: var(--accent-primary); }
+.text-primary-400 { color: var(--accent-primary); }
+.text-primary-500 { color: var(--accent-primary); }
+.text-primary-600 { color: var(--accent-primary); }
+
+.bg-success-400 { background-color: var(--success-color); }
+.bg-success-500 { background-color: var(--success-color); }
+.text-success-400 { color: var(--success-color); }
+
+.bg-warning-400 { background-color: var(--warning-color); }
+.bg-warning-500 { background-color: var(--warning-color); }
+.text-warning-400 { color: var(--warning-color); }
+
+.bg-danger-400 { background-color: var(--error-color); }
+.bg-danger-500 { background-color: var(--error-color); }
+.text-danger-400 { color: var(--error-color); }
+
+/* 文本渐变类 */
+.text-gradient {
+  background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* 主内容区域确保背景色正确 */
+main {
+  background-color: var(--bg-primary);
+  transition: background-color 0.3s ease;
+}
+
+/* 页面内容区域 */
+.flex-1 {
+  background-color: var(--bg-primary);
+  transition: background-color 0.3s ease;
+}

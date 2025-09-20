@@ -1,6 +1,6 @@
 <template>
-  <aside class="fixed left-0 top-16 bottom-0 w-64 glass-card border-r border-white/10 z-40">
-    <div class="p-6">
+  <aside class="fixed left-0 top-12 bottom-0 w-64 glass-card border-r border-white/10 z-40">
+    <div class="p-4">
       <!-- 导航菜单 -->
       <nav class="space-y-2">
         <router-link
