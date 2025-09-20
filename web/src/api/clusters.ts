@@ -109,8 +109,15 @@ export const addCluster = async (clusterData: {
   cluster_alias?: string
   api_server: string
   auth_type: string
-  auth_config: string
+  auth_config: {
+    bearer_token?: string
+    client_cert?: string
+    client_key?: string
+    ca_cert?: string
+    kubeconfig?: string
+  }
   collect_interval?: number
+  tags?: string[]
 }) => {
   const response = await api.post<ApiResponse<any>>('/clusters', clusterData)
   return response.data.data
@@ -126,6 +133,23 @@ export const updateCluster = async (clusterId: number, clusterData: any) => {
 export const deleteCluster = async (clusterId: number) => {
   const response = await api.delete<ApiResponse<any>>(`/clusters/${clusterId}`)
   return response.data.data
+}
+
+// 测试集群连接配置（创建前验证）
+export const testClusterConfig = async (clusterData: {
+  cluster_name: string
+  api_server: string
+  auth_type: string
+  auth_config: {
+    bearer_token?: string
+    client_cert?: string
+    client_key?: string
+    ca_cert?: string
+    kubeconfig?: string
+  }
+}) => {
+  const response = await api.post<ApiResponse<any>>('/clusters/test', clusterData)
+  return response.data.data.data
 }
 
 // 获取集群详细信息

@@ -22,12 +22,16 @@ export const useSystemStore = defineStore('system', () => {
         api.get('/analysis')
       ])
       
-      const clusters = clustersRes.data.data || []
-      const analysis = analysisRes.data || {}
+      // 修复数据路径 - 根据实际API响应结构
+      const clusters = clustersRes.data?.data?.data || []
+      const analysis = analysisRes.data?.data || {}
+      
+      // 确保clusters是数组
+      const clustersArray = Array.isArray(clusters) ? clusters : []
       
       stats.value = {
-        total_clusters: clusters.length,
-        online_clusters: clusters.filter((c: any) => c.status === 'online').length,
+        total_clusters: clustersArray.length,
+        online_clusters: clustersArray.filter((c: any) => c.status === 'online').length,
         total_pods: analysis.total_pods || 0,
         problem_pods: analysis.unreasonable_pods || 0,
         last_update: new Date().toISOString()

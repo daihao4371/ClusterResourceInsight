@@ -29,7 +29,7 @@
               v-model="searchQuery"
               type="text"
               placeholder="搜索集群名称、地址..."
-              class="input-field pl-10"
+              class="input-field search-input"
             />
           </div>
         </div>
@@ -39,14 +39,6 @@
           <option value="online">在线</option>
           <option value="offline">离线</option>
           <option value="error">错误</option>
-        </select>
-        
-        <select v-model="regionFilter" class="input-field">
-          <option value="">所有区域</option>
-          <option value="us-east">美东</option>
-          <option value="us-west">美西</option>
-          <option value="eu-central">欧洲</option>
-          <option value="asia-pacific">亚太</option>
         </select>
       </div>
     </div>
@@ -90,10 +82,38 @@
           </div>
           
           <!-- 操作菜单 -->
-          <div class="opacity-0 group-hover:opacity-100 transition-opacity">
-            <button class="p-2 hover:bg-white/10 rounded-lg transition-colors">
+          <div class="relative">
+            <button 
+              @click.stop="toggleDropdown(cluster.id)"
+              class="p-2 hover:bg-white/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+            >
               <MoreVertical class="w-4 h-4" />
             </button>
+            
+            <!-- 下拉菜单 -->
+            <div 
+              v-if="activeDropdown === cluster.id"
+              class="absolute right-0 mt-2 w-48 bg-dark-800 border border-gray-700 rounded-lg shadow-lg z-10"
+            >
+              <button 
+                @click.stop="editCluster(cluster)"
+                class="w-full text-left px-4 py-2 text-sm hover:bg-dark-700 transition-colors flex items-center space-x-2"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                <span>编辑集群</span>
+              </button>
+              <button 
+                @click.stop="confirmDeleteCluster(cluster)"
+                class="w-full text-left px-4 py-2 text-sm text-danger-400 hover:bg-dark-700 transition-colors flex items-center space-x-2"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span>删除集群</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -207,10 +227,229 @@
       <Server class="w-16 h-16 text-gray-600 mx-auto mb-4" />
       <h3 class="text-lg font-semibold text-gray-400 mb-2">暂无集群数据</h3>
       <p class="text-gray-500 mb-6">{{ searchQuery ? '未找到匹配的集群' : '开始添加您的第一个集群' }}</p>
-      <button class="btn-primary">
+      <button @click="addNewCluster" class="btn-primary">
         <Plus class="w-4 h-4 mr-2" />
         添加集群
       </button>
+    </div>
+
+    <!-- 添加/编辑集群弹窗 -->
+    <div v-if="showClusterModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div class="glass-card w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xl font-semibold">{{ isEditing ? '编辑集群' : '添加集群' }}</h2>
+            <button @click="closeClusterModal" class="text-gray-400 hover:text-white">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <form @submit.prevent="submitCluster" class="space-y-4">
+            <!-- 基本信息 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium mb-2">集群名称 *</label>
+                <input 
+                  v-model="clusterForm.cluster_name" 
+                  type="text" 
+                  required 
+                  :disabled="isEditing"
+                  class="input-field" 
+                  placeholder="输入集群名称"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-2">集群别名</label>
+                <input 
+                  v-model="clusterForm.cluster_alias" 
+                  type="text" 
+                  class="input-field" 
+                  placeholder="输入集群别名"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium mb-2">API Server地址 *</label>
+              <input 
+                v-model="clusterForm.api_server" 
+                type="url" 
+                required 
+                class="input-field" 
+                placeholder="https://k8s-api.example.com:6443"
+              />
+            </div>
+
+            <!-- 认证配置 -->
+            <div>
+              <label class="block text-sm font-medium mb-2">认证类型 *</label>
+              <select v-model="clusterForm.auth_type" required class="input-field">
+                <option value="">选择认证类型</option>
+                <option value="token">Bearer Token</option>
+                <option value="cert">证书认证</option>
+                <option value="kubeconfig">Kubeconfig</option>
+              </select>
+            </div>
+
+            <!-- Token认证 -->
+            <div v-if="clusterForm.auth_type === 'token'">
+              <label class="block text-sm font-medium mb-2">Bearer Token *</label>
+              <textarea 
+                v-model="clusterForm.auth_config.bearer_token" 
+                required 
+                class="input-field" 
+                rows="3"
+                placeholder="输入Bearer Token"
+              ></textarea>
+            </div>
+
+            <!-- 证书认证 -->
+            <div v-if="clusterForm.auth_type === 'cert'" class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium mb-2">客户端证书 *</label>
+                <textarea 
+                  v-model="clusterForm.auth_config.client_cert" 
+                  required 
+                  class="input-field" 
+                  rows="4"
+                  placeholder="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+                ></textarea>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-2">客户端私钥 *</label>
+                <textarea 
+                  v-model="clusterForm.auth_config.client_key" 
+                  required 
+                  class="input-field" 
+                  rows="4"
+                  placeholder="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+                ></textarea>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-2">CA证书</label>
+                <textarea 
+                  v-model="clusterForm.auth_config.ca_cert" 
+                  class="input-field" 
+                  rows="4"
+                  placeholder="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+                ></textarea>
+              </div>
+            </div>
+
+            <!-- Kubeconfig认证 -->
+            <div v-if="clusterForm.auth_type === 'kubeconfig'">
+              <label class="block text-sm font-medium mb-2">Kubeconfig内容 *</label>
+              <textarea 
+                v-model="clusterForm.auth_config.kubeconfig" 
+                required 
+                class="input-field" 
+                rows="6"
+                placeholder="apiVersion: v1\nclusters:\n..."
+              ></textarea>
+            </div>
+
+            <!-- 高级配置 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium mb-2">采集间隔（分钟）</label>
+                <input 
+                  v-model.number="clusterForm.collect_interval" 
+                  type="number" 
+                  min="1" 
+                  max="1440" 
+                  class="input-field" 
+                  placeholder="30"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-2">集群标签</label>
+                <input 
+                  v-model="tagsInput" 
+                  type="text" 
+                  class="input-field" 
+                  placeholder="生产,东部,kubernetes（用逗号分隔）"
+                />
+              </div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="flex justify-end space-x-3 pt-4">
+              <button type="button" @click="closeClusterModal" class="btn-secondary">
+                取消
+              </button>
+              <button 
+                type="button" 
+                @click="testClusterConnection" 
+                :disabled="submitting || !canTestConnection"
+                class="btn-secondary"
+              >
+                <RefreshCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': testing }" />
+                {{ testing ? '测试中...' : '测试连接' }}
+              </button>
+              <button 
+                type="submit" 
+                :disabled="submitting"
+                class="btn-primary"
+              >
+                <RefreshCw v-if="submitting" class="w-4 h-4 mr-2 animate-spin" />
+                {{ submitting ? '保存中...' : (isEditing ? '更新集群' : '创建集群') }}
+              </button>
+            </div>
+
+            <!-- 测试结果 -->
+            <div v-if="testResult" class="mt-4 p-4 rounded-lg" :class="testResult.success ? 'bg-success-500/10 border border-success-500/30' : 'bg-danger-500/10 border border-danger-500/30'">
+              <div class="flex items-center space-x-2">
+                <div class="w-4 h-4 rounded-full" :class="testResult.success ? 'bg-success-500' : 'bg-danger-500'"></div>
+                <span class="font-medium" :class="testResult.success ? 'text-success-400' : 'text-danger-400'">
+                  {{ testResult.success ? '连接成功' : '连接失败' }}
+                </span>
+              </div>
+              <p class="text-sm mt-2" :class="testResult.success ? 'text-success-300' : 'text-danger-300'">
+                {{ testResult.message }}
+              </p>
+              <div v-if="testResult.success && testResult.version" class="text-xs text-gray-400 mt-2">
+                版本: {{ testResult.version }} | 节点: {{ testResult.node_count }} | 响应时间: {{ testResult.response_time_ms }}ms
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- 删除确认弹窗 -->
+    <div v-if="showDeleteModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div class="glass-card w-full max-w-md mx-4">
+        <div class="p-6">
+          <div class="flex items-center space-x-3 mb-4">
+            <div class="w-12 h-12 rounded-full bg-danger-500/20 flex items-center justify-center">
+              <svg class="w-6 h-6 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-danger-400">确认删除</h3>
+              <p class="text-sm text-gray-400">此操作不可撤销</p>
+            </div>
+          </div>
+          
+          <p class="text-gray-300 mb-6">
+            确定要删除集群 <span class="font-semibold text-white">{{ clusterToDelete?.name }}</span> 吗？
+            这将删除所有相关的配置和历史数据。
+          </p>
+          
+          <div class="flex justify-end space-x-3">
+            <button @click="cancelDelete" class="btn-secondary">
+              取消
+            </button>
+            <button @click="executeDelete" :disabled="deleting" class="btn-danger">
+              <RefreshCw v-if="deleting" class="w-4 h-4 mr-2 animate-spin" />
+              {{ deleting ? '删除中...' : '确认删除' }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -226,18 +465,48 @@ import {
   ExternalLink 
 } from 'lucide-vue-next'
 import { formatDistanceToNow } from '../utils/date'
-import { getClustersWithStats, testCluster } from '../api/clusters'
+import { getClustersWithStats, testCluster, addCluster, updateCluster, deleteCluster, testClusterConfig } from '../api/clusters'
 import type { Cluster } from '../types'
 
 // 搜索和筛选状态
 const searchQuery = ref('')
 const statusFilter = ref('')
-const regionFilter = ref('')
 
 // 数据状态
 const clusters = ref<Cluster[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
+
+// UI状态
+const activeDropdown = ref<string | null>(null)
+const showClusterModal = ref(false)
+const showDeleteModal = ref(false)
+const isEditing = ref(false)
+const submitting = ref(false)
+const testing = ref(false)
+const deleting = ref(false)
+
+// 表单数据
+const clusterForm = ref({
+  cluster_name: '',
+  cluster_alias: '',
+  api_server: '',
+  auth_type: '',
+  auth_config: {
+    bearer_token: '',
+    client_cert: '',
+    client_key: '',
+    ca_cert: '',
+    kubeconfig: ''
+  },
+  collect_interval: 30,
+  tags: [] as string[]
+})
+
+const tagsInput = ref('')
+const testResult = ref<any>(null)
+const clusterToDelete = ref<Cluster | null>(null)
+const editingClusterId = ref<number | null>(null)
 
 // 获取集群数据
 const fetchClusters = async () => {
@@ -261,17 +530,28 @@ const fetchClusters = async () => {
   }
 }
 
-// 筛选后的集群列表
+// 计算属性
+const canTestConnection = computed(() => {
+  return clusterForm.value.cluster_name && 
+         clusterForm.value.api_server && 
+         clusterForm.value.auth_type &&
+         (
+           (clusterForm.value.auth_type === 'token' && clusterForm.value.auth_config.bearer_token) ||
+           (clusterForm.value.auth_type === 'cert' && clusterForm.value.auth_config.client_cert && clusterForm.value.auth_config.client_key) ||
+           (clusterForm.value.auth_type === 'kubeconfig' && clusterForm.value.auth_config.kubeconfig)
+         )
+})
 const filteredClusters = computed(() => {
   return clusters.value.filter(cluster => {
+    // 搜索条件匹配：集群名称或API服务器地址
     const matchesSearch = !searchQuery.value || 
       cluster.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
       cluster.endpoint.toLowerCase().includes(searchQuery.value.toLowerCase())
     
+    // 状态筛选匹配
     const matchesStatus = !statusFilter.value || cluster.status === statusFilter.value
-    const matchesRegion = !regionFilter.value || cluster.region === regionFilter.value
     
-    return matchesSearch && matchesStatus && matchesRegion
+    return matchesSearch && matchesStatus
   })
 })
 
@@ -303,7 +583,113 @@ const getResourceBarClass = (usage?: number) => {
   return 'bg-gradient-to-r from-success-600 to-success-400'
 }
 
-// 操作方法
+// 点击外部关闭下拉菜单
+const toggleDropdown = (clusterId: string) => {
+  activeDropdown.value = activeDropdown.value === clusterId ? null : clusterId
+}
+
+// 重置表单
+const resetForm = () => {
+  clusterForm.value = {
+    cluster_name: '',
+    cluster_alias: '',
+    api_server: '',
+    auth_type: '',
+    auth_config: {
+      bearer_token: '',
+      client_cert: '',
+      client_key: '',
+      ca_cert: '',
+      kubeconfig: ''
+    },
+    collect_interval: 30,
+    tags: []
+  }
+  tagsInput.value = ''
+  testResult.value = null
+}
+
+// 关闭弹窗
+const closeClusterModal = () => {
+  showClusterModal.value = false
+  isEditing.value = false
+  editingClusterId.value = null
+  resetForm()
+}
+
+// 测试集群连接
+const testClusterConnection = async () => {
+  if (!canTestConnection.value) return
+  
+  try {
+    testing.value = true
+    testResult.value = null
+    
+    // 构建测试请求数据
+    const testData = {
+      cluster_name: clusterForm.value.cluster_name,
+      api_server: clusterForm.value.api_server,
+      auth_type: clusterForm.value.auth_type,
+      auth_config: {
+        ...clusterForm.value.auth_config
+      }
+    }
+    
+    // 调用测试API
+    const result = await testClusterConfig(testData)
+    
+    testResult.value = {
+      success: result.success || true,
+      message: result.message || '连接测试成功',
+      ...result
+    }
+  } catch (err) {
+    testResult.value = {
+      success: false,
+      message: err instanceof Error ? err.message : '连接测试失败'
+    }
+  } finally {
+    testing.value = false
+  }
+}
+
+// 提交表单
+const submitCluster = async () => {
+  try {
+    submitting.value = true
+    
+    // 处理标签数据
+    const tags = tagsInput.value 
+      ? tagsInput.value.split(',').map(tag => tag.trim()).filter(tag => tag)
+      : []
+    
+    const formData = {
+      cluster_name: clusterForm.value.cluster_name,
+      cluster_alias: clusterForm.value.cluster_alias || clusterForm.value.cluster_name,
+      api_server: clusterForm.value.api_server,
+      auth_type: clusterForm.value.auth_type,
+      auth_config: clusterForm.value.auth_config,
+      collect_interval: clusterForm.value.collect_interval || 30,
+      tags
+    }
+    
+    if (isEditing.value && editingClusterId.value) {
+      await updateCluster(editingClusterId.value, formData)
+    } else {
+      await addCluster(formData)
+    }
+    
+    // 刷新集群列表
+    await fetchClusters()
+    closeClusterModal()
+    
+  } catch (err) {
+    console.error('保存集群失败:', err)
+    alert(err instanceof Error ? err.message : '保存集群失败')
+  } finally {
+    submitting.value = false
+  }
+}
 const viewClusterDetail = (cluster: Cluster) => {
   console.log('查看集群详情:', cluster)
   // TODO: 实现集群详情页面跳转
@@ -331,7 +717,88 @@ const refreshAllClusters = async () => {
 // 添加集群
 const addNewCluster = () => {
   console.log('添加新集群')
-  // TODO: 实现添加集群弹窗
+  activeDropdown.value = null
+  isEditing.value = false
+  resetForm()
+  showClusterModal.value = true
+}
+
+// 编辑集群
+const editCluster = async (cluster: Cluster) => {
+  console.log('编辑集群:', cluster)
+  activeDropdown.value = null
+  
+  try {
+    // 获取集群详细信息
+    const response = await fetch(`/api/clusters/${cluster.id}`)
+    const result = await response.json()
+    
+    if (result.code === 0) {
+      const clusterData = result.data.data
+      
+      // 填充表单数据
+      clusterForm.value = {
+        cluster_name: clusterData.cluster_name,
+        cluster_alias: clusterData.cluster_alias || '',
+        api_server: clusterData.api_server,
+        auth_type: clusterData.auth_type,
+        auth_config: {
+          bearer_token: '',
+          client_cert: '',
+          client_key: '',
+          ca_cert: '',
+          kubeconfig: ''
+        },
+        collect_interval: clusterData.collect_interval || 30,
+        tags: clusterData.tags ? JSON.parse(clusterData.tags) : []
+      }
+      
+      // 设置标签输入
+      tagsInput.value = clusterForm.value.tags.join(', ')
+      
+      isEditing.value = true
+      editingClusterId.value = parseInt(cluster.id)
+      showClusterModal.value = true
+    }
+  } catch (err) {
+    console.error('获取集群详情失败:', err)
+    alert('获取集群详情失败')
+  }
+}
+
+// 确认删除集群
+const confirmDeleteCluster = (cluster: Cluster) => {
+  console.log('删除集群:', cluster)
+  activeDropdown.value = null
+  clusterToDelete.value = cluster
+  showDeleteModal.value = true
+}
+
+// 取消删除
+const cancelDelete = () => {
+  showDeleteModal.value = false
+  clusterToDelete.value = null
+}
+
+// 执行删除
+const executeDelete = async () => {
+  if (!clusterToDelete.value) return
+  
+  try {
+    deleting.value = true
+    await deleteCluster(parseInt(clusterToDelete.value.id))
+    
+    // 刷新集群列表
+    await fetchClusters()
+    showDeleteModal.value = false
+    clusterToDelete.value = null
+    
+  } catch (err) {
+    console.error('删除集群失败:', err)
+    alert(err instanceof Error ? err.message : '删除集群失败')
+  } finally {
+    deleting.value = false
+  }
 }
 
 // 格式化最后更新时间
@@ -352,6 +819,11 @@ const formatMemory = (memoryGB?: number) => {
 // 组件挂载时获取数据
 onMounted(() => {
   fetchClusters()
+  
+  // 点击外部关闭下拉菜单
+  document.addEventListener('click', () => {
+    activeDropdown.value = null
+  })
 })
 </script>
 
@@ -370,5 +842,82 @@ onMounted(() => {
 
 .status-indicator-large {
   @apply w-4 h-4 rounded-full;
+}
+
+.btn-secondary {
+  @apply px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors;
+}
+
+.btn-primary {
+  @apply px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-colors;
+}
+
+.btn-danger {
+  @apply px-4 py-2 bg-danger-600 hover:bg-danger-500 text-white rounded-lg transition-colors;
+}
+
+.input-field {
+  @apply w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-primary-500 focus:outline-none;
+}
+
+/* 搜索框专用样式，确保文本与放大镜图标不重叠 */
+.search-input {
+  padding-left: 2.75rem; /* 44px，为放大镜图标预留足够空间 */
+}
+
+.glass-card {
+  @apply rounded-xl border border-gray-700/50 backdrop-blur-sm;
+  background: rgba(17, 24, 39, 0.8);
+}
+
+/* 状态指示器样式 */
+.status-online {
+  @apply bg-success-500;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+}
+
+.status-offline {
+  @apply bg-gray-500;
+}
+
+.status-error {
+  @apply bg-danger-500;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+.status-warning {
+  @apply bg-warning-500;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+}
+
+/* 渐变样式 */
+.text-gradient {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 动画样式 */
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .cluster-card:hover {
+    transform: none;
+  }
 }
 </style>

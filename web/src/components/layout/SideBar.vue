@@ -126,7 +126,7 @@ const navigationItems = computed(() => [
     path: '/clusters',
     label: '集群管理',
     icon: Server,
-    statusCount: systemStore.stats?.total_clusters - systemStore.stats?.online_clusters || 0
+    statusCount: (systemStore.stats?.total_clusters || 0) - (systemStore.stats?.online_clusters || 0)
   },
   {
     name: 'Pods',
