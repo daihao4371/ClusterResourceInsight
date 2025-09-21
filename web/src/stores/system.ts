@@ -16,25 +16,16 @@ export const useSystemStore = defineStore('system', () => {
     error.value = null
     
     try {
-      // 并行获取多个数据源
-      const [clustersRes, analysisRes] = await Promise.all([
-        api.get('/clusters'),
-        api.get('/analysis')
-      ])
+      // 调用新的统计接口
+      const statsRes = await api.get('/stats')
       
-      // 修复数据路径 - 根据实际API响应结构
-      const clusters = clustersRes.data?.data?.data || []
-      const analysis = analysisRes.data?.data || {}
-      
-      // 确保clusters是数组
-      const clustersArray = Array.isArray(clusters) ? clusters : []
-      
+      // 直接使用统计接口返回的数据
       stats.value = {
-        total_clusters: clustersArray.length,
-        online_clusters: clustersArray.filter((c: any) => c.status === 'online').length,
-        total_pods: analysis.total_pods || 0,
-        problem_pods: analysis.unreasonable_pods || 0,
-        last_update: new Date().toISOString()
+        total_clusters: statsRes.data?.data?.total_clusters || 0,
+        online_clusters: statsRes.data?.data?.online_clusters || 0,
+        total_pods: statsRes.data?.data?.total_pods || 0,
+        problem_pods: statsRes.data?.data?.problem_pods || 0,
+        last_update: statsRes.data?.data?.last_update || new Date().toISOString()
       }
     } catch (err: any) {
       error.value = err.message || '获取系统统计信息失败'

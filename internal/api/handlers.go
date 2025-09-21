@@ -4,6 +4,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"time"
 
 	"cluster-resource-insight/internal/collector"
 	"cluster-resource-insight/internal/logger"
@@ -18,6 +19,9 @@ func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollec
 	r.GET("/analysis", getResourceAnalysis(resourceCollector))
 	r.GET("/pods", getPodsData(resourceCollector))
 	r.GET("/health", healthCheck)
+
+	// 新增系统统计接口
+	r.GET("/stats", getSystemStats(resourceCollector))
 
 	// 新增的资源统计接口
 	multiCollector := collector.NewMultiClusterResourceCollector()
@@ -383,6 +387,61 @@ func healthCheck(c *gin.Context) {
 		"status": "healthy",
 		"service": "cluster-resource-insight",
 	}, c)
+}
+
+// 系统统计接口 - 提供Dashboard页面所需的统计数据
+func getSystemStats(resourceCollector *collector.ResourceCollector) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		logger.Info("获取系统统计数据...")
+		
+		// 使用多集群收集器获取完整的统计数据
+		multiCollector := collector.NewMultiClusterResourceCollector()
+		
+		// 并行获取集群和分析数据
+		clusterService := service.NewClusterService()
+		clusters, err := clusterService.GetAllClusters()
+		if err != nil {
+			logger.Error("获取集群列表失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+		
+		// 获取资源分析数据
+		analysisResult, err := multiCollector.CollectAllClustersData(c.Request.Context())
+		if err != nil {
+			logger.Error("获取资源分析数据失败: %v", err)
+			// 如果分析数据获取失败，仍然返回基础统计信息
+			analysisResult = &collector.AnalysisResult{
+				TotalPods:        0,
+				UnreasonablePods: 0,
+				Top50Problems:    []collector.PodResourceInfo{},
+				GeneratedAt:      time.Now(),
+				ClustersAnalyzed: 0,
+			}
+		}
+		
+		// 统计在线集群数量
+		onlineClusters := 0
+		for _, cluster := range clusters {
+			if cluster.Status == "online" {
+				onlineClusters++
+			}
+		}
+		
+		// 构建系统统计响应
+		stats := gin.H{
+			"total_clusters":  len(clusters),
+			"online_clusters": onlineClusters,
+			"total_pods":      analysisResult.TotalPods,
+			"problem_pods":    analysisResult.UnreasonablePods,
+			"last_update":     time.Now().Format(time.RFC3339),
+		}
+		
+		logger.Info("系统统计数据获取完成: clusters=%d, online=%d, pods=%d, problems=%d", 
+			len(clusters), onlineClusters, analysisResult.TotalPods, analysisResult.UnreasonablePods)
+		
+		response.OkWithData(stats, c)
+	}
 }
 
 func min(a, b int) int {
