@@ -65,9 +65,12 @@
       <div class="glass-card p-6">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-xl font-semibold">集群状态分布</h2>
-          <button class="btn-secondary text-sm">
+          <router-link 
+            to="/clusters" 
+            class="btn-secondary text-sm hover:scale-105 transition-transform"
+          >
             查看详情
-          </button>
+          </router-link>
         </div>
         <ClusterStatusChart :data="clusterData" />
       </div>
