@@ -216,6 +216,7 @@ export interface SystemStats {
   total_pods: number
   problem_pods: number
   resource_efficiency: number
+  cluster_status_distribution: ChartData[]
   last_update: string
 }
 

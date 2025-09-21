@@ -205,11 +205,18 @@ const podTrend = ref('+12.5%')
 const problemTrend = ref('-8.1%')
 const efficiencyTrend = ref('+1.2%')
 
-const clusterData = ref([
-  { name: '在线', value: 8, color: '#22c55e' },
-  { name: '离线', value: 2, color: '#ef4444' },
-  { name: '错误', value: 1, color: '#f59e0b' }
-])
+const clusterData = computed(() => {
+  const stats = systemStore.stats
+  if (!stats || !stats.cluster_status_distribution || stats.cluster_status_distribution.length === 0) {
+    // 返回默认数据结构
+    return [
+      { name: '在线', value: stats?.online_clusters || 0, color: '#22c55e' },
+      { name: '离线', value: (stats?.total_clusters || 0) - (stats?.online_clusters || 0), color: '#ef4444' }
+    ]
+  }
+  // 使用后端提供的实际数据
+  return stats.cluster_status_distribution
+})
 
 const trendData = ref([
   { time: '00:00', cpu: 45, memory: 60, pods: 120 },

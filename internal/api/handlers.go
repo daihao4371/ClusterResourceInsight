@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cluster-resource-insight/internal/models"
 	"math"
 	"sort"
 	"strconv"
@@ -63,26 +64,26 @@ func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollec
 	scheduleService := service.NewScheduleService()
 	scheduleGroup := r.Group("/schedule")
 	{
-		scheduleGroup.GET("/status", getScheduleStatus(scheduleService))      // 获取调度服务状态
-		scheduleGroup.POST("/start", startScheduleService(scheduleService))   // 启动调度服务
-		scheduleGroup.POST("/stop", stopScheduleService(scheduleService))    // 停止调度服务
-		scheduleGroup.GET("/jobs", getScheduleJobs(scheduleService))         // 获取所有调度任务状态
+		scheduleGroup.GET("/status", getScheduleStatus(scheduleService))                    // 获取调度服务状态
+		scheduleGroup.POST("/start", startScheduleService(scheduleService))                 // 启动调度服务
+		scheduleGroup.POST("/stop", stopScheduleService(scheduleService))                   // 停止调度服务
+		scheduleGroup.GET("/jobs", getScheduleJobs(scheduleService))                        // 获取所有调度任务状态
 		scheduleGroup.POST("/jobs/:cluster_id/restart", restartClusterJob(scheduleService)) // 重启指定集群任务
-		scheduleGroup.PUT("/settings", updateScheduleSettings(scheduleService)) // 更新全局调度配置
+		scheduleGroup.PUT("/settings", updateScheduleSettings(scheduleService))             // 更新全局调度配置
 	}
 
 	// 集群管理接口
 	clusterService := service.NewClusterService()
-	
+
 	// 集群管理路由组
 	clusterGroup := r.Group("/clusters")
 	{
-		clusterGroup.POST("", createCluster(clusterService))                    // 创建集群
+		clusterGroup.POST("", createCluster(clusterService))                   // 创建集群
 		clusterGroup.GET("", getAllClusters(clusterService))                   // 获取所有集群
 		clusterGroup.GET("/:id", getClusterByID(clusterService))               // 根据ID获取集群
 		clusterGroup.PUT("/:id", updateCluster(clusterService))                // 更新集群配置
 		clusterGroup.DELETE("/:id", deleteCluster(clusterService))             // 删除集群
-		clusterGroup.POST("/:id/test", testClusterConnection(clusterService))   // 测试集群连接
+		clusterGroup.POST("/:id/test", testClusterConnection(clusterService))  // 测试集群连接
 		clusterGroup.POST("/test", testClusterByConfig(clusterService))        // 测试集群配置（创建前验证）
 		clusterGroup.POST("/batch-test", batchTestAllClusters(clusterService)) // 批量测试所有集群
 	}
@@ -260,22 +261,22 @@ func batchTestAllClusters(clusterService *service.ClusterService) gin.HandlerFun
 func getResourceAnalysis(resourceCollector *collector.ResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger.Info("Starting resource analysis...")
-		
+
 		// 获取分页参数
 		pageStr := c.DefaultQuery("page", "1")
 		sizeStr := c.DefaultQuery("size", "50")
 		clusterName := c.Query("cluster_name")
-		
+
 		page, err := strconv.Atoi(pageStr)
 		if err != nil || page <= 0 {
 			page = 1
 		}
-		
+
 		size, err := strconv.Atoi(sizeStr)
 		if err != nil || size <= 0 {
 			size = 50
 		}
-		
+
 		// 使用多集群收集器获取数据
 		multiCollector := collector.NewMultiClusterResourceCollector()
 		result, err := multiCollector.CollectAllClustersData(c.Request.Context())
@@ -323,9 +324,9 @@ func getResourceAnalysis(resourceCollector *collector.ResourceCollector) gin.Han
 			ClustersAnalyzed: result.ClustersAnalyzed,
 		}
 
-		logger.Info("Analysis complete: total_pods=%d, unreasonable_pods=%d, page=%d, size=%d, cluster=%s", 
+		logger.Info("Analysis complete: total_pods=%d, unreasonable_pods=%d, page=%d, size=%d, cluster=%s",
 			result.TotalPods, result.UnreasonablePods, page, size, clusterName)
-		
+
 		response.OkWithData(gin.H{
 			"data": pagedResult,
 			"pagination": gin.H{
@@ -366,11 +367,11 @@ func getPodsData(resourceCollector *collector.ResourceCollector) gin.HandlerFunc
 			if len(pods) > limit {
 				pods = pods[:limit]
 			}
-		response.OkWithData(gin.H{
-			"pods":        pods,
-			"total_count": len(result.Top50Problems),
-			"limit":       limit,
-		}, c)
+			response.OkWithData(gin.H{
+				"pods":        pods,
+				"total_count": len(result.Top50Problems),
+				"limit":       limit,
+			}, c)
 		} else {
 			// 返回所有数据，这里需要重新收集
 			response.OkWithData(gin.H{
@@ -384,7 +385,7 @@ func getPodsData(resourceCollector *collector.ResourceCollector) gin.HandlerFunc
 
 func healthCheck(c *gin.Context) {
 	response.OkWithData(gin.H{
-		"status": "healthy",
+		"status":  "healthy",
 		"service": "cluster-resource-insight",
 	}, c)
 }
@@ -393,10 +394,10 @@ func healthCheck(c *gin.Context) {
 func getSystemStats(resourceCollector *collector.ResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger.Info("获取系统统计数据...")
-		
+
 		// 使用多集群收集器获取完整的统计数据
 		multiCollector := collector.NewMultiClusterResourceCollector()
-		
+
 		// 并行获取集群和分析数据
 		clusterService := service.NewClusterService()
 		clusters, err := clusterService.GetAllClusters()
@@ -405,7 +406,7 @@ func getSystemStats(resourceCollector *collector.ResourceCollector) gin.HandlerF
 			response.InternalServerError(err.Error(), c)
 			return
 		}
-		
+
 		// 获取资源分析数据
 		analysisResult, err := multiCollector.CollectAllClustersData(c.Request.Context())
 		if err != nil {
@@ -419,7 +420,7 @@ func getSystemStats(resourceCollector *collector.ResourceCollector) gin.HandlerF
 				ClustersAnalyzed: 0,
 			}
 		}
-		
+
 		// 统计在线集群数量
 		onlineClusters := 0
 		for _, cluster := range clusters {
@@ -427,23 +428,27 @@ func getSystemStats(resourceCollector *collector.ResourceCollector) gin.HandlerF
 				onlineClusters++
 			}
 		}
-		
+
 		// 计算资源效率 - 基于所有Pod的实际使用率
 		resourceEfficiency := calculateResourceEfficiency(analysisResult)
-		
+
+		// 计算集群状态分布
+		clusterStatusDistribution := calculateClusterStatusDistribution(clusters)
+
 		// 构建系统统计响应
 		stats := gin.H{
-			"total_clusters":     len(clusters),
-			"online_clusters":    onlineClusters,
-			"total_pods":         analysisResult.TotalPods,
-			"problem_pods":       analysisResult.UnreasonablePods,
-			"resource_efficiency": resourceEfficiency,
-			"last_update":        time.Now().Format(time.RFC3339),
+			"total_clusters":              len(clusters),
+			"online_clusters":             onlineClusters,
+			"total_pods":                  analysisResult.TotalPods,
+			"problem_pods":                analysisResult.UnreasonablePods,
+			"resource_efficiency":         resourceEfficiency,
+			"cluster_status_distribution": clusterStatusDistribution,
+			"last_update":                 time.Now().Format(time.RFC3339),
 		}
-		
-		logger.Info("系统统计数据获取完成: clusters=%d, online=%d, pods=%d, problems=%d, efficiency=%.1f%%", 
+
+		logger.Info("系统统计数据获取完成: clusters=%d, online=%d, pods=%d, problems=%d, efficiency=%.1f%%",
 			len(clusters), onlineClusters, analysisResult.TotalPods, analysisResult.UnreasonablePods, resourceEfficiency)
-		
+
 		response.OkWithData(stats, c)
 	}
 }
@@ -453,10 +458,10 @@ func calculateResourceEfficiency(analysisResult *collector.AnalysisResult) float
 	if analysisResult == nil || analysisResult.TotalPods == 0 {
 		return 0.0
 	}
-	
+
 	// 获取所有Pod数据（包括问题Pod和正常Pod）
 	allPods := analysisResult.Top50Problems
-	
+
 	// 如果没有足够的数据，返回基于问题Pod比例的简单计算
 	if len(allPods) == 0 {
 		if analysisResult.TotalPods == 0 {
@@ -464,10 +469,10 @@ func calculateResourceEfficiency(analysisResult *collector.AnalysisResult) float
 		}
 		return float64(analysisResult.TotalPods-analysisResult.UnreasonablePods) / float64(analysisResult.TotalPods) * 100
 	}
-	
+
 	var totalCPUEfficiency, totalMemoryEfficiency float64
 	var validPods int
-	
+
 	// 计算所有Pod的平均资源使用效率
 	for _, pod := range allPods {
 		// CPU效率：实际使用率（如果有请求的话）
@@ -476,17 +481,17 @@ func calculateResourceEfficiency(analysisResult *collector.AnalysisResult) float
 			cpuEfficiency := math.Min(pod.CPUReqPct, 100.0)
 			totalCPUEfficiency += cpuEfficiency
 		}
-		
+
 		// 内存效率：实际使用率（如果有请求的话）
 		if pod.MemoryRequest > 0 && pod.MemoryReqPct > 0 {
 			// MemoryReqPct已经是使用率百分比，限制在合理范围内
 			memoryEfficiency := math.Min(pod.MemoryReqPct, 100.0)
 			totalMemoryEfficiency += memoryEfficiency
 		}
-		
+
 		validPods++
 	}
-	
+
 	// 如果没有有效的Pod数据，使用简单算法
 	if validPods == 0 {
 		if analysisResult.TotalPods == 0 {
@@ -494,16 +499,76 @@ func calculateResourceEfficiency(analysisResult *collector.AnalysisResult) float
 		}
 		return float64(analysisResult.TotalPods-analysisResult.UnreasonablePods) / float64(analysisResult.TotalPods) * 100
 	}
-	
+
 	// 计算平均效率
 	avgCPUEfficiency := totalCPUEfficiency / float64(validPods)
 	avgMemoryEfficiency := totalMemoryEfficiency / float64(validPods)
-	
+
 	// 综合资源效率 = (CPU效率 + 内存效率) / 2
 	overallEfficiency := (avgCPUEfficiency + avgMemoryEfficiency) / 2.0
-	
+
 	// 确保返回值在合理范围内
 	return math.Max(0.0, math.Min(100.0, overallEfficiency))
+}
+
+// 计算集群状态分布 - 为前端图表提供数据
+func calculateClusterStatusDistribution(clusters []models.ClusterConfig) []gin.H {
+	// 统计各种状态的集群数量
+	statusCount := make(map[string]int)
+
+	for _, cluster := range clusters {
+		statusCount[cluster.Status]++
+	}
+
+	// 构建前端期望的数据格式
+	var distribution []gin.H
+
+	// 在线集群
+	if count, exists := statusCount["online"]; exists {
+		distribution = append(distribution, gin.H{
+			"name":  "在线",
+			"value": count,
+			"color": "#22c55e", // 绿色
+		})
+	}
+
+	// 离线集群
+	if count, exists := statusCount["offline"]; exists {
+		distribution = append(distribution, gin.H{
+			"name":  "离线",
+			"value": count,
+			"color": "#ef4444", // 红色
+		})
+	}
+
+	// 错误状态集群
+	if count, exists := statusCount["error"]; exists {
+		distribution = append(distribution, gin.H{
+			"name":  "错误",
+			"value": count,
+			"color": "#f59e0b", // 橙色
+		})
+	}
+
+	// 未知状态集群
+	if count, exists := statusCount["unknown"]; exists {
+		distribution = append(distribution, gin.H{
+			"name":  "未知",
+			"value": count,
+			"color": "#6b7280", // 灰色
+		})
+	}
+
+	// 如果没有任何状态数据，返回空分布
+	if len(distribution) == 0 {
+		distribution = append(distribution, gin.H{
+			"name":  "在线",
+			"value": 0,
+			"color": "#22c55e",
+		})
+	}
+
+	return distribution
 }
 
 func min(a, b int) int {
@@ -521,14 +586,14 @@ func getTopMemoryRequestPods(multiCollector *collector.MultiClusterResourceColle
 		if err != nil {
 			limit = 50
 		}
-		
+
 		pods, err := multiCollector.GetTopMemoryRequestPods(c.Request.Context(), limit)
 		if err != nil {
 			logger.Error("获取Top内存请求Pod失败: %v", err)
 			response.InternalServerError(err.Error(), c)
 			return
 		}
-		
+
 		response.OkWithData(gin.H{
 			"data":  pods,
 			"count": len(pods),
@@ -544,14 +609,14 @@ func getTopCPURequestPods(multiCollector *collector.MultiClusterResourceCollecto
 		if err != nil {
 			limit = 50
 		}
-		
+
 		pods, err := multiCollector.GetTopCPURequestPods(c.Request.Context(), limit)
 		if err != nil {
 			logger.Error("获取Top CPU请求Pod失败: %v", err)
 			response.InternalServerError(err.Error(), c)
 			return
 		}
-		
+
 		response.OkWithData(gin.H{
 			"data":  pods,
 			"count": len(pods),
@@ -568,7 +633,7 @@ func getNamespacesSummary(multiCollector *collector.MultiClusterResourceCollecto
 			response.InternalServerError(err.Error(), c)
 			return
 		}
-		
+
 		response.OkWithData(gin.H{
 			"data":  summaries,
 			"count": len(summaries),
@@ -585,18 +650,18 @@ func getAllNamespaces(multiCollector *collector.MultiClusterResourceCollector) g
 			response.InternalServerError(err.Error(), c)
 			return
 		}
-		
+
 		// 提取命名空间名称列表
 		namespaces := make([]string, 0)
 		namespaceMap := make(map[string]bool)
-		
+
 		for _, summary := range summaries {
 			if !namespaceMap[summary.NamespaceName] {
 				namespaces = append(namespaces, summary.NamespaceName)
 				namespaceMap[summary.NamespaceName] = true
 			}
 		}
-		
+
 		response.OkWithData(gin.H{
 			"data":  namespaces,
 			"count": len(namespaces),
@@ -611,14 +676,14 @@ func getNamespacePods(multiCollector *collector.MultiClusterResourceCollector) g
 			response.BadRequest("命名空间参数不能为空", c)
 			return
 		}
-		
+
 		pods, err := multiCollector.GetNamespacePods(c.Request.Context(), namespace)
 		if err != nil {
 			logger.Error("获取命名空间Pod失败: %v", err)
 			response.InternalServerError(err.Error(), c)
 			return
 		}
-		
+
 		response.OkWithData(gin.H{
 			"data":      pods,
 			"count":     len(pods),
@@ -634,14 +699,14 @@ func getNamespaceTreeData(multiCollector *collector.MultiClusterResourceCollecto
 			response.BadRequest("命名空间参数不能为空", c)
 			return
 		}
-		
+
 		treeData, err := multiCollector.GetNamespaceTreeData(c.Request.Context(), namespace)
 		if err != nil {
 			logger.Error("获取命名空间树状数据失败: %v", err)
 			response.InternalServerError(err.Error(), c)
 			return
 		}
-		
+
 		response.OkWithData(gin.H{
 			"data": treeData,
 		}, c)
@@ -656,7 +721,7 @@ func searchPods(multiCollector *collector.MultiClusterResourceCollector) gin.Han
 			response.BadRequest("请求参数格式错误: "+err.Error(), c)
 			return
 		}
-		
+
 		// 设置默认值
 		if req.Page <= 0 {
 			req.Page = 1
@@ -664,14 +729,14 @@ func searchPods(multiCollector *collector.MultiClusterResourceCollector) gin.Han
 		if req.Size <= 0 {
 			req.Size = 10
 		}
-		
+
 		podsResponse, err := multiCollector.SearchPods(c.Request.Context(), req)
 		if err != nil {
 			logger.Error("搜索Pod失败: %v", err)
 			response.InternalServerError(err.Error(), c)
 			return
 		}
-		
+
 		response.OkWithData(podsResponse, c)
 	}
 }
@@ -680,29 +745,29 @@ func listPods(multiCollector *collector.MultiClusterResourceCollector) gin.Handl
 	return func(c *gin.Context) {
 		pageStr := c.DefaultQuery("page", "1")
 		sizeStr := c.DefaultQuery("size", "10")
-		
+
 		page, err := strconv.Atoi(pageStr)
 		if err != nil || page <= 0 {
 			page = 1
 		}
-		
+
 		size, err := strconv.Atoi(sizeStr)
 		if err != nil || size <= 0 {
 			size = 10
 		}
-		
+
 		req := collector.PodSearchRequest{
 			Page: page,
 			Size: size,
 		}
-		
+
 		podsResponse, err := multiCollector.SearchPods(c.Request.Context(), req)
 		if err != nil {
 			logger.Error("获取Pod列表失败: %v", err)
 			response.InternalServerError(err.Error(), c)
 			return
 		}
-		
+
 		response.OkWithData(podsResponse, c)
 	}
 }
@@ -921,17 +986,17 @@ func getProblemsWithPagination(multiCollector *collector.MultiClusterResourceCol
 		sizeStr := c.DefaultQuery("size", "10")
 		clusterName := c.Query("cluster_name")
 		sortBy := c.DefaultQuery("sort_by", "total_waste")
-		
+
 		page, err := strconv.Atoi(pageStr)
 		if err != nil || page <= 0 {
 			page = 1
 		}
-		
+
 		size, err := strconv.Atoi(sizeStr)
 		if err != nil || size <= 0 || size > 100 { // 限制最大每页数量
 			size = 10
 		}
-		
+
 		// 获取所有问题Pod数据
 		result, err := multiCollector.CollectAllClustersData(c.Request.Context())
 		if err != nil {
@@ -973,19 +1038,19 @@ func getProblemsWithPagination(multiCollector *collector.MultiClusterResourceCol
 			pagedProblems = filteredProblems[start:end]
 		}
 
-		logger.Info("问题Pod分页查询完成: total=%d, page=%d, size=%d, cluster=%s, sort=%s", 
+		logger.Info("问题Pod分页查询完成: total=%d, page=%d, size=%d, cluster=%s, sort=%s",
 			total, page, size, clusterName, sortBy)
-		
+
 		response.OkWithData(gin.H{
-			"pods":       pagedProblems,
-			"total":      total,
-			"page":       page,
-			"size":       size,
-			"total_pages": totalPages,
-			"has_next":   end < total,
-			"has_prev":   page > 1,
+			"pods":         pagedProblems,
+			"total":        total,
+			"page":         page,
+			"size":         size,
+			"total_pages":  totalPages,
+			"has_next":     end < total,
+			"has_prev":     page > 1,
 			"cluster_name": clusterName,
-			"sort_by":    sortBy,
+			"sort_by":      sortBy,
 		}, c)
 	}
 }
