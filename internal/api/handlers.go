@@ -1,9 +1,6 @@
 package api
 
 import (
-	"cluster-resource-insight/internal/models"
-	"math"
-	"sort"
 	"strconv"
 	"time"
 
@@ -11,6 +8,8 @@ import (
 	"cluster-resource-insight/internal/logger"
 	"cluster-resource-insight/internal/response"
 	"cluster-resource-insight/internal/service"
+	"cluster-resource-insight/pkg/statistics"
+	"cluster-resource-insight/pkg/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -262,20 +261,11 @@ func getResourceAnalysis(resourceCollector *collector.ResourceCollector) gin.Han
 	return func(c *gin.Context) {
 		logger.Info("Starting resource analysis...")
 
-		// 获取分页参数
-		pageStr := c.DefaultQuery("page", "1")
-		sizeStr := c.DefaultQuery("size", "50")
+		// 使用统一的分页处理器解析分页参数
+		paginationHandler := utils.NewHttpPaginationHandler()
+		paginationParams := paginationHandler.ParsePaginationParams(c, 50)
+		
 		clusterName := c.Query("cluster_name")
-
-		page, err := strconv.Atoi(pageStr)
-		if err != nil || page <= 0 {
-			page = 1
-		}
-
-		size, err := strconv.Atoi(sizeStr)
-		if err != nil || size <= 0 {
-			size = 50
-		}
 
 		// 使用多集群收集器获取数据
 		multiCollector := collector.NewMultiClusterResourceCollector()
@@ -299,21 +289,7 @@ func getResourceAnalysis(resourceCollector *collector.ResourceCollector) gin.Han
 		}
 
 		// 应用分页
-		total := len(filteredProblems)
-		start := (page - 1) * size
-		end := start + size
-
-		if start > total {
-			start = total
-		}
-		if end > total {
-			end = total
-		}
-
-		var pagedProblems []collector.PodResourceInfo
-		if start < end {
-			pagedProblems = filteredProblems[start:end]
-		}
+		pagedProblems, paginationResult := paginationHandler.ApplyPaginationToSlice(filteredProblems, paginationParams)
 
 		// 构造分页响应
 		pagedResult := &collector.AnalysisResult{
@@ -325,22 +301,15 @@ func getResourceAnalysis(resourceCollector *collector.ResourceCollector) gin.Han
 		}
 
 		logger.Info("Analysis complete: total_pods=%d, unreasonable_pods=%d, page=%d, size=%d, cluster=%s",
-			result.TotalPods, result.UnreasonablePods, page, size, clusterName)
+			result.TotalPods, result.UnreasonablePods, paginationParams.Page, paginationParams.Size, clusterName)
 
-		response.OkWithData(gin.H{
-			"data": pagedResult,
-			"pagination": gin.H{
-				"page":        page,
-				"size":        size,
-				"total":       total,
-				"total_pages": (total + size - 1) / size,
-				"has_next":    end < total,
-				"has_prev":    page > 1,
-			},
-			"filter": gin.H{
-				"cluster_name": clusterName,
-			},
-		}, c)
+		// 使用统一的分页响应构建器
+		responseData := paginationHandler.BuildPaginationResponse(paginationParams, paginationResult.Total, pagedResult)
+		responseData["filter"] = gin.H{
+			"cluster_name": clusterName,
+		}
+
+		response.OkWithData(responseData, c)
 	}
 }
 
@@ -377,7 +346,7 @@ func getPodsData(resourceCollector *collector.ResourceCollector) gin.HandlerFunc
 			response.OkWithData(gin.H{
 				"total_pods":        result.TotalPods,
 				"unreasonable_pods": result.UnreasonablePods,
-				"problems":          result.Top50Problems[:min(limit, len(result.Top50Problems))],
+				"problems":          result.Top50Problems[:utils.MinInt(limit, len(result.Top50Problems))],
 			}, c)
 		}
 	}
@@ -421,162 +390,17 @@ func getSystemStats(resourceCollector *collector.ResourceCollector) gin.HandlerF
 			}
 		}
 
-		// 统计在线集群数量
-		onlineClusters := 0
-		for _, cluster := range clusters {
-			if cluster.Status == "online" {
-				onlineClusters++
-			}
-		}
+		// 使用统计构建器构建响应数据
+		statsBuilder := statistics.NewSystemStatsBuilder()
+		stats := statsBuilder.BuildSystemStats(clusters, analysisResult)
 
-		// 计算资源效率 - 基于所有Pod的实际使用率
-		resourceEfficiency := calculateResourceEfficiency(analysisResult)
-
-		// 计算集群状态分布
-		clusterStatusDistribution := calculateClusterStatusDistribution(clusters)
-
-		// 构建系统统计响应
-		stats := gin.H{
-			"total_clusters":              len(clusters),
-			"online_clusters":             onlineClusters,
-			"total_pods":                  analysisResult.TotalPods,
-			"problem_pods":                analysisResult.UnreasonablePods,
-			"resource_efficiency":         resourceEfficiency,
-			"cluster_status_distribution": clusterStatusDistribution,
-			"last_update":                 time.Now().Format(time.RFC3339),
-		}
-
-		logger.Info("系统统计数据获取完成: clusters=%d, online=%d, pods=%d, problems=%d, efficiency=%.1f%%",
-			len(clusters), onlineClusters, analysisResult.TotalPods, analysisResult.UnreasonablePods, resourceEfficiency)
+		logger.Info("系统统计数据获取完成: clusters=%d, online=%d, pods=%d, problems=%d",
+			len(clusters), stats["online_clusters"], analysisResult.TotalPods, analysisResult.UnreasonablePods)
 
 		response.OkWithData(stats, c)
 	}
 }
 
-// 计算综合资源效率
-func calculateResourceEfficiency(analysisResult *collector.AnalysisResult) float64 {
-	if analysisResult == nil || analysisResult.TotalPods == 0 {
-		return 0.0
-	}
-
-	// 获取所有Pod数据（包括问题Pod和正常Pod）
-	allPods := analysisResult.Top50Problems
-
-	// 如果没有足够的数据，返回基于问题Pod比例的简单计算
-	if len(allPods) == 0 {
-		if analysisResult.TotalPods == 0 {
-			return 0.0
-		}
-		return float64(analysisResult.TotalPods-analysisResult.UnreasonablePods) / float64(analysisResult.TotalPods) * 100
-	}
-
-	var totalCPUEfficiency, totalMemoryEfficiency float64
-	var validPods int
-
-	// 计算所有Pod的平均资源使用效率
-	for _, pod := range allPods {
-		// CPU效率：实际使用率（如果有请求的话）
-		if pod.CPURequest > 0 && pod.CPUReqPct > 0 {
-			// CPUReqPct已经是使用率百分比，限制在合理范围内
-			cpuEfficiency := math.Min(pod.CPUReqPct, 100.0)
-			totalCPUEfficiency += cpuEfficiency
-		}
-
-		// 内存效率：实际使用率（如果有请求的话）
-		if pod.MemoryRequest > 0 && pod.MemoryReqPct > 0 {
-			// MemoryReqPct已经是使用率百分比，限制在合理范围内
-			memoryEfficiency := math.Min(pod.MemoryReqPct, 100.0)
-			totalMemoryEfficiency += memoryEfficiency
-		}
-
-		validPods++
-	}
-
-	// 如果没有有效的Pod数据，使用简单算法
-	if validPods == 0 {
-		if analysisResult.TotalPods == 0 {
-			return 0.0
-		}
-		return float64(analysisResult.TotalPods-analysisResult.UnreasonablePods) / float64(analysisResult.TotalPods) * 100
-	}
-
-	// 计算平均效率
-	avgCPUEfficiency := totalCPUEfficiency / float64(validPods)
-	avgMemoryEfficiency := totalMemoryEfficiency / float64(validPods)
-
-	// 综合资源效率 = (CPU效率 + 内存效率) / 2
-	overallEfficiency := (avgCPUEfficiency + avgMemoryEfficiency) / 2.0
-
-	// 确保返回值在合理范围内
-	return math.Max(0.0, math.Min(100.0, overallEfficiency))
-}
-
-// 计算集群状态分布 - 为前端图表提供数据
-func calculateClusterStatusDistribution(clusters []models.ClusterConfig) []gin.H {
-	// 统计各种状态的集群数量
-	statusCount := make(map[string]int)
-
-	for _, cluster := range clusters {
-		statusCount[cluster.Status]++
-	}
-
-	// 构建前端期望的数据格式
-	var distribution []gin.H
-
-	// 在线集群
-	if count, exists := statusCount["online"]; exists {
-		distribution = append(distribution, gin.H{
-			"name":  "在线",
-			"value": count,
-			"color": "#22c55e", // 绿色
-		})
-	}
-
-	// 离线集群
-	if count, exists := statusCount["offline"]; exists {
-		distribution = append(distribution, gin.H{
-			"name":  "离线",
-			"value": count,
-			"color": "#ef4444", // 红色
-		})
-	}
-
-	// 错误状态集群
-	if count, exists := statusCount["error"]; exists {
-		distribution = append(distribution, gin.H{
-			"name":  "错误",
-			"value": count,
-			"color": "#f59e0b", // 橙色
-		})
-	}
-
-	// 未知状态集群
-	if count, exists := statusCount["unknown"]; exists {
-		distribution = append(distribution, gin.H{
-			"name":  "未知",
-			"value": count,
-			"color": "#6b7280", // 灰色
-		})
-	}
-
-	// 如果没有任何状态数据，返回空分布
-	if len(distribution) == 0 {
-		distribution = append(distribution, gin.H{
-			"name":  "在线",
-			"value": 0,
-			"color": "#22c55e",
-		})
-	}
-
-	return distribution
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
 
 // 资源统计相关handlers
 func getTopMemoryRequestPods(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
@@ -743,22 +567,13 @@ func searchPods(multiCollector *collector.MultiClusterResourceCollector) gin.Han
 
 func listPods(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		pageStr := c.DefaultQuery("page", "1")
-		sizeStr := c.DefaultQuery("size", "10")
-
-		page, err := strconv.Atoi(pageStr)
-		if err != nil || page <= 0 {
-			page = 1
-		}
-
-		size, err := strconv.Atoi(sizeStr)
-		if err != nil || size <= 0 {
-			size = 10
-		}
+		// 使用统一的分页处理器解析分页参数
+		paginationHandler := utils.NewHttpPaginationHandler()
+		paginationParams := paginationHandler.ParsePaginationParams(c, 10)
 
 		req := collector.PodSearchRequest{
-			Page: page,
-			Size: size,
+			Page: paginationParams.Page,
+			Size: paginationParams.Size,
 		}
 
 		podsResponse, err := multiCollector.SearchPods(c.Request.Context(), req)
@@ -775,19 +590,19 @@ func listPods(multiCollector *collector.MultiClusterResourceCollector) gin.Handl
 // 历史数据相关handlers
 func queryHistoryData(historyService *service.HistoryService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 使用统一的分页处理器解析分页参数
+		paginationHandler := utils.NewHttpPaginationHandler()
+		paginationParams := paginationHandler.ParsePaginationParams(c, 20)
+
 		var req service.HistoryQueryRequest
 		if err := c.ShouldBindQuery(&req); err != nil {
 			response.BadRequest("请求参数格式错误: "+err.Error(), c)
 			return
 		}
 
-		// 设置默认值
-		if req.Page <= 0 {
-			req.Page = 1
-		}
-		if req.Size <= 0 {
-			req.Size = 20
-		}
+		// 使用统一分页参数
+		req.Page = paginationParams.Page
+		req.Size = paginationParams.Size
 
 		historyResponse, err := historyService.QueryHistory(req)
 		if err != nil {
@@ -981,21 +796,12 @@ func updateScheduleSettings(scheduleService *service.ScheduleService) gin.Handle
 // 问题Pod分页接口
 func getProblemsWithPagination(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 获取分页参数
-		pageStr := c.DefaultQuery("page", "1")
-		sizeStr := c.DefaultQuery("size", "10")
+		// 使用统一的分页处理器解析分页参数
+		paginationHandler := utils.NewHttpPaginationHandler()
+		paginationParams := paginationHandler.ParsePaginationParams(c, 10)
+		
 		clusterName := c.Query("cluster_name")
 		sortBy := c.DefaultQuery("sort_by", "total_waste")
-
-		page, err := strconv.Atoi(pageStr)
-		if err != nil || page <= 0 {
-			page = 1
-		}
-
-		size, err := strconv.Atoi(sizeStr)
-		if err != nil || size <= 0 || size > 100 { // 限制最大每页数量
-			size = 10
-		}
 
 		// 获取所有问题Pod数据
 		result, err := multiCollector.CollectAllClustersData(c.Request.Context())
@@ -1018,88 +824,21 @@ func getProblemsWithPagination(multiCollector *collector.MultiClusterResourceCol
 		}
 
 		// 应用排序
-		sortProblems(filteredProblems, sortBy)
+		podSorter := utils.NewPodSorter()
+		podSorter.SortProblems(filteredProblems, sortBy)
 
-		// 应用分页
-		total := len(filteredProblems)
-		totalPages := (total + size - 1) / size
-		start := (page - 1) * size
-		end := start + size
-
-		if start > total {
-			start = total
-		}
-		if end > total {
-			end = total
-		}
-
-		var pagedProblems []collector.PodResourceInfo
-		if start < end {
-			pagedProblems = filteredProblems[start:end]
-		}
+		// 使用统一的分页处理器应用分页
+		pagedProblems, paginationResult := paginationHandler.ApplyPaginationToSlice(filteredProblems, paginationParams)
 
 		logger.Info("问题Pod分页查询完成: total=%d, page=%d, size=%d, cluster=%s, sort=%s",
-			total, page, size, clusterName, sortBy)
+			paginationResult.Total, paginationParams.Page, paginationParams.Size, clusterName, sortBy)
 
-		response.OkWithData(gin.H{
-			"pods":         pagedProblems,
-			"total":        total,
-			"page":         page,
-			"size":         size,
-			"total_pages":  totalPages,
-			"has_next":     end < total,
-			"has_prev":     page > 1,
-			"cluster_name": clusterName,
-			"sort_by":      sortBy,
-		}, c)
+		// 使用统一的分页响应构建器
+		responseData := paginationHandler.BuildPaginationResponse(paginationParams, paginationResult.Total, pagedProblems)
+		responseData["cluster_name"] = clusterName
+		responseData["sort_by"] = sortBy
+
+		response.OkWithData(responseData, c)
 	}
 }
 
-// 对问题Pod进行排序
-func sortProblems(problems []collector.PodResourceInfo, sortBy string) {
-	switch sortBy {
-	case "cpu_waste":
-		sort.Slice(problems, func(i, j int) bool {
-			cpuWasteI := calculateCPUWaste(problems[i])
-			cpuWasteJ := calculateCPUWaste(problems[j])
-			return cpuWasteI > cpuWasteJ
-		})
-	case "memory_waste":
-		sort.Slice(problems, func(i, j int) bool {
-			memoryWasteI := calculateMemoryWaste(problems[i])
-			memoryWasteJ := calculateMemoryWaste(problems[j])
-			return memoryWasteI > memoryWasteJ
-		})
-	case "total_waste":
-		fallthrough
-	default:
-		sort.Slice(problems, func(i, j int) bool {
-			totalWasteI := calculateTotalWaste(problems[i])
-			totalWasteJ := calculateTotalWaste(problems[j])
-			return totalWasteI > totalWasteJ
-		})
-	}
-}
-
-// 计算CPU浪费程度
-func calculateCPUWaste(pod collector.PodResourceInfo) float64 {
-	if pod.CPUReqPct <= 0 {
-		return 0
-	}
-	return math.Max(0, 100-pod.CPUReqPct)
-}
-
-// 计算内存浪费程度
-func calculateMemoryWaste(pod collector.PodResourceInfo) float64 {
-	if pod.MemoryReqPct <= 0 {
-		return 0
-	}
-	return math.Max(0, 100-pod.MemoryReqPct)
-}
-
-// 计算总浪费程度
-func calculateTotalWaste(pod collector.PodResourceInfo) float64 {
-	cpuWaste := calculateCPUWaste(pod)
-	memoryWaste := calculateMemoryWaste(pod)
-	return (cpuWaste + memoryWaste) / 2
-}
