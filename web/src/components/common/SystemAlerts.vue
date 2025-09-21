@@ -198,7 +198,7 @@ const getLevelText = (level: Alert['level']) => {
 <style scoped>
 .alert-card {
   @apply p-4 rounded-lg border backdrop-blur-sm cursor-pointer transition-all duration-300;
-  background: rgba(17, 24, 39, 0.6);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .custom-scrollbar {
