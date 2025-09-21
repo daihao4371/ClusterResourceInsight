@@ -258,7 +258,7 @@ export function useAnalysis() {
       
       const response = await api.get<ApiResponse<any>>('/pods/problems', { params })
       
-      // 后端新接口返回结构：{code: 0, data: {cluster_name, has_next, has_prev, page, pods, size, total, total_pages}, msg}
+      // 后端新接口返回结构：{code: 0, data: {cluster_name, data: [...], pagination: {...}, sort_by}, msg}
       const responseData = response.data.data // 获取实际数据部分
       
       // 如果analysis.value不存在，先初始化基础结构
@@ -272,24 +272,36 @@ export function useAnalysis() {
         }
       }
       
-      // 更新问题Pod数据 - 直接使用后端返回的pods数组
-      if (responseData && Array.isArray(responseData.pods)) {
-        analysis.value.top50_problems = responseData.pods
+      // 更新问题Pod数据 - Pod数组在responseData.data中
+      if (responseData && responseData.data && Array.isArray(responseData.data)) {
+        analysis.value.top50_problems = responseData.data
         // 同时更新统计数据
-        analysis.value.unreasonable_pods = responseData.total || responseData.pods.length
+        analysis.value.unreasonable_pods = responseData.pagination?.total || responseData.data.length
       } else {
         analysis.value.top50_problems = []
         console.warn('API返回的pods数据格式异常:', responseData)
       }
       
-      // 更新分页信息 - 直接使用后端返回的分页数据
-      pagination.value = {
-        page: responseData.page || 1,
-        size: responseData.size || 10,
-        total: responseData.total || 0,
-        total_pages: responseData.total_pages || 0,
-        has_next: responseData.has_next || false,
-        has_prev: responseData.has_prev || false
+      // 更新分页信息 - 分页信息在responseData.pagination中
+      if (responseData.pagination) {
+        pagination.value = {
+          page: responseData.pagination.page || 1,
+          size: responseData.pagination.size || 10,
+          total: responseData.pagination.total || 0,
+          total_pages: responseData.pagination.total_pages || 0,
+          has_next: responseData.pagination.has_next || false,
+          has_prev: responseData.pagination.has_prev || false
+        }
+      } else {
+        // 如果没有分页信息，使用默认值
+        pagination.value = {
+          page: 1,
+          size: 10,
+          total: 0,
+          total_pages: 0,
+          has_next: false,
+          has_prev: false
+        }
       }
       
       // 更新筛选信息

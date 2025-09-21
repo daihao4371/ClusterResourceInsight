@@ -8,6 +8,7 @@ import (
 
 	"cluster-resource-insight/internal/database"
 	"cluster-resource-insight/internal/models"
+	"cluster-resource-insight/pkg/pagination"
 
 	"gorm.io/gorm"
 )
@@ -112,15 +113,13 @@ func (hs *HistoryService) SavePodMetrics(clusterID uint, pods []PodResourceInfo)
 	return nil
 }
 
-// QueryHistory 查询历史数据
+// QueryHistory 查询历史数据 - 使用统一分页逻辑
 func (hs *HistoryService) QueryHistory(req HistoryQueryRequest) (*HistoryQueryResponse, error) {
-	// 设置默认值
-	if req.Page <= 0 {
-		req.Page = 1
-	}
-	if req.Size <= 0 {
-		req.Size = 20
-	}
+	// 使用统一的分页处理器
+	paginationHandler := pagination.NewDatabasePaginationHandler()
+	paginationParams := paginationHandler.ParsePaginationParams(req.Page, req.Size, 20)
+	
+	// 设置默认排序
 	if req.OrderBy == "" {
 		req.OrderBy = "collected_at"
 		req.OrderDesc = true
@@ -159,9 +158,9 @@ func (hs *HistoryService) QueryHistory(req HistoryQueryRequest) (*HistoryQueryRe
 	}
 	query = query.Order(orderClause)
 
-	// 应用分页
-	offset := (req.Page - 1) * req.Size
-	query = query.Offset(offset).Limit(req.Size)
+	// 使用统一分页逻辑计算偏移量
+	offset, limit := paginationHandler.CalculatePaginationOffset(paginationParams)
+	query = query.Offset(offset).Limit(limit)
 
 	// 执行查询
 	var data []models.PodMetricsHistory
@@ -169,15 +168,15 @@ func (hs *HistoryService) QueryHistory(req HistoryQueryRequest) (*HistoryQueryRe
 		return nil, fmt.Errorf("查询历史数据失败: %v", err)
 	}
 
-	// 计算总页数
-	totalPages := int((total + int64(req.Size) - 1) / int64(req.Size))
+	// 构建分页结果
+	paginationResult := paginationHandler.BuildPaginationResult(paginationParams, total)
 
 	return &HistoryQueryResponse{
 		Data:       data,
 		Total:      total,
-		Page:       req.Page,
-		Size:       req.Size,
-		TotalPages: totalPages,
+		Page:       paginationResult.Page,
+		Size:       paginationResult.Size,
+		TotalPages: paginationResult.TotalPages,
 	}, nil
 }
 

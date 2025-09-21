@@ -209,3 +209,42 @@ func MinInt(a, b int) int {
 	}
 	return b
 }
+
+// GormPaginationHandler GORM数据库分页处理器
+type GormPaginationHandler struct{}
+
+// NewGormPaginationHandler 创建GORM分页处理器实例
+func NewGormPaginationHandler() *GormPaginationHandler {
+	return &GormPaginationHandler{}
+}
+
+// ApplyPaginationToQuery 对GORM查询应用分页逻辑
+// 自动处理计数查询、偏移量计算和结果构建
+func (handler *GormPaginationHandler) ApplyPaginationToQuery(query interface{}, params PaginationParams) (offset int, limit int, result PaginationResult, err error) {
+	// 计算偏移量和限制
+	offset = (params.Page - 1) * params.Size
+	limit = params.Size
+	
+	// 构建分页结果（总数需要外部设置）
+	result = PaginationResult{
+		Page:    params.Page,
+		Size:    params.Size,
+		Total:   0, // 将由调用方设置
+		HasPrev: params.Page > 1,
+	}
+	
+	return offset, limit, result, nil
+}
+
+// BuildQueryPaginationResponse 构建查询分页响应 - 标准化数据库查询分页结果格式
+func (handler *GormPaginationHandler) BuildQueryPaginationResponse(params PaginationParams, total int64, data interface{}) map[string]interface{} {
+	totalPages := int((total + int64(params.Size) - 1) / int64(params.Size))
+	
+	return map[string]interface{}{
+		"data":        data,
+		"total":       total,
+		"page":        params.Page,
+		"size":        params.Size,
+		"total_pages": totalPages,
+	}
+}
