@@ -215,6 +215,7 @@ export interface SystemStats {
   online_clusters: number
   total_pods: number
   problem_pods: number
+  resource_efficiency: number
   last_update: string
 }
 

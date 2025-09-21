@@ -189,8 +189,9 @@ const podStatus = computed(() => {
 
 const resourceEfficiency = computed(() => {
   const stats = systemStore.stats
-  if (!stats || stats.total_pods === 0) return 0
-  return Math.round(((stats.total_pods - stats.problem_pods) / stats.total_pods) * 100)
+  if (!stats) return 0
+  // 直接使用后端计算的资源效率，并保留一位小数
+  return Math.round((stats.resource_efficiency || 0) * 10) / 10
 })
 
 const efficiencyStatus = computed(() => {

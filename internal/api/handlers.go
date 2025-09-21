@@ -428,20 +428,82 @@ func getSystemStats(resourceCollector *collector.ResourceCollector) gin.HandlerF
 			}
 		}
 		
+		// 计算资源效率 - 基于所有Pod的实际使用率
+		resourceEfficiency := calculateResourceEfficiency(analysisResult)
+		
 		// 构建系统统计响应
 		stats := gin.H{
-			"total_clusters":  len(clusters),
-			"online_clusters": onlineClusters,
-			"total_pods":      analysisResult.TotalPods,
-			"problem_pods":    analysisResult.UnreasonablePods,
-			"last_update":     time.Now().Format(time.RFC3339),
+			"total_clusters":     len(clusters),
+			"online_clusters":    onlineClusters,
+			"total_pods":         analysisResult.TotalPods,
+			"problem_pods":       analysisResult.UnreasonablePods,
+			"resource_efficiency": resourceEfficiency,
+			"last_update":        time.Now().Format(time.RFC3339),
 		}
 		
-		logger.Info("系统统计数据获取完成: clusters=%d, online=%d, pods=%d, problems=%d", 
-			len(clusters), onlineClusters, analysisResult.TotalPods, analysisResult.UnreasonablePods)
+		logger.Info("系统统计数据获取完成: clusters=%d, online=%d, pods=%d, problems=%d, efficiency=%.1f%%", 
+			len(clusters), onlineClusters, analysisResult.TotalPods, analysisResult.UnreasonablePods, resourceEfficiency)
 		
 		response.OkWithData(stats, c)
 	}
+}
+
+// 计算综合资源效率
+func calculateResourceEfficiency(analysisResult *collector.AnalysisResult) float64 {
+	if analysisResult == nil || analysisResult.TotalPods == 0 {
+		return 0.0
+	}
+	
+	// 获取所有Pod数据（包括问题Pod和正常Pod）
+	allPods := analysisResult.Top50Problems
+	
+	// 如果没有足够的数据，返回基于问题Pod比例的简单计算
+	if len(allPods) == 0 {
+		if analysisResult.TotalPods == 0 {
+			return 0.0
+		}
+		return float64(analysisResult.TotalPods-analysisResult.UnreasonablePods) / float64(analysisResult.TotalPods) * 100
+	}
+	
+	var totalCPUEfficiency, totalMemoryEfficiency float64
+	var validPods int
+	
+	// 计算所有Pod的平均资源使用效率
+	for _, pod := range allPods {
+		// CPU效率：实际使用率（如果有请求的话）
+		if pod.CPURequest > 0 && pod.CPUReqPct > 0 {
+			// CPUReqPct已经是使用率百分比，限制在合理范围内
+			cpuEfficiency := math.Min(pod.CPUReqPct, 100.0)
+			totalCPUEfficiency += cpuEfficiency
+		}
+		
+		// 内存效率：实际使用率（如果有请求的话）
+		if pod.MemoryRequest > 0 && pod.MemoryReqPct > 0 {
+			// MemoryReqPct已经是使用率百分比，限制在合理范围内
+			memoryEfficiency := math.Min(pod.MemoryReqPct, 100.0)
+			totalMemoryEfficiency += memoryEfficiency
+		}
+		
+		validPods++
+	}
+	
+	// 如果没有有效的Pod数据，使用简单算法
+	if validPods == 0 {
+		if analysisResult.TotalPods == 0 {
+			return 0.0
+		}
+		return float64(analysisResult.TotalPods-analysisResult.UnreasonablePods) / float64(analysisResult.TotalPods) * 100
+	}
+	
+	// 计算平均效率
+	avgCPUEfficiency := totalCPUEfficiency / float64(validPods)
+	avgMemoryEfficiency := totalMemoryEfficiency / float64(validPods)
+	
+	// 综合资源效率 = (CPU效率 + 内存效率) / 2
+	overallEfficiency := (avgCPUEfficiency + avgMemoryEfficiency) / 2.0
+	
+	// 确保返回值在合理范围内
+	return math.Max(0.0, math.Min(100.0, overallEfficiency))
 }
 
 func min(a, b int) int {

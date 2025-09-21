@@ -25,6 +25,7 @@ export const useSystemStore = defineStore('system', () => {
         online_clusters: statsRes.data?.data?.online_clusters || 0,
         total_pods: statsRes.data?.data?.total_pods || 0,
         problem_pods: statsRes.data?.data?.problem_pods || 0,
+        resource_efficiency: statsRes.data?.data?.resource_efficiency || 0,
         last_update: statsRes.data?.data?.last_update || new Date().toISOString()
       }
     } catch (err: any) {
