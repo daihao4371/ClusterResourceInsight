@@ -79,14 +79,21 @@
       <div class="glass-card p-6">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-xl font-semibold">资源使用趋势</h2>
-          <select class="input-field text-sm">
-            <option value="1h">最近1小时</option>
-            <option value="6h">最近6小时</option>
-            <option value="24h">最近24小时</option>
-            <option value="7d">最近7天</option>
+          <select 
+            v-model="selectedTimeRange" 
+            @change="onTimeRangeChange"
+            class="input-field text-sm"
+          >
+            <option value="1">最近1小时</option>
+            <option value="6">最近6小时</option>
+            <option value="24">最近24小时</option>
+            <option value="168">最近7天</option>
           </select>
         </div>
-        <ResourceTrendChart :data="trendData" />
+        <div v-if="systemStore.trendLoading" class="flex items-center justify-center h-80">
+          <div class="text-gray-400">加载中...</div>
+        </div>
+        <ResourceTrendChart v-else :data="systemStore.trendData" />
       </div>
     </div>
 
@@ -208,6 +215,9 @@ const podTrend = ref('+12.5%')
 const problemTrend = ref('-8.1%')
 const efficiencyTrend = ref('+1.2%')
 
+// 时间范围选择器状态
+const selectedTimeRange = ref('24') // 默认24小时
+
 const clusterData = computed(() => {
   const stats = systemStore.stats
   if (!stats || !stats.cluster_status_distribution || stats.cluster_status_distribution.length === 0) {
@@ -221,14 +231,11 @@ const clusterData = computed(() => {
   return stats.cluster_status_distribution
 })
 
-const trendData = ref([
-  { time: '00:00', cpu: 45, memory: 60, pods: 120 },
-  { time: '04:00', cpu: 52, memory: 65, pods: 125 },
-  { time: '08:00', cpu: 48, memory: 58, pods: 118 },
-  { time: '12:00', cpu: 55, memory: 70, pods: 132 },
-  { time: '16:00', cpu: 62, memory: 75, pods: 140 },
-  { time: '20:00', cpu: 58, memory: 68, pods: 135 }
-])
+// 时间范围改变处理
+const onTimeRangeChange = () => {
+  const hours = parseInt(selectedTimeRange.value)
+  systemStore.fetchTrendData(hours)
+}
 
 const realtimeActivities = ref([
   { type: 'success', message: '集群 prod-cluster-01 连接正常', time: '刚刚' },
@@ -246,5 +253,7 @@ const systemAlerts = ref([
 onMounted(() => {
   // 初始化数据
   systemStore.fetchStats()
+  // 初始化趋势数据 - 默认24小时
+  systemStore.fetchTrendData(24)
 })
 </script>

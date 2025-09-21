@@ -54,6 +54,7 @@ func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollec
 	{
 		historyGroup.GET("/query", queryHistoryData(historyService))
 		historyGroup.GET("/trends", getTrendData(historyService))
+		historyGroup.GET("/system-trends", getSystemTrendData(historyService)) // 新增系统级趋势数据接口
 		historyGroup.GET("/statistics", getHistoryStatistics(historyService))
 		historyGroup.POST("/collect", triggerDataCollection(multiCollector))
 		historyGroup.DELETE("/cleanup", cleanupOldData(historyService))
@@ -839,6 +840,38 @@ func getProblemsWithPagination(multiCollector *collector.MultiClusterResourceCol
 		responseData["sort_by"] = sortBy
 
 		response.OkWithData(responseData, c)
+	}
+}
+
+// getSystemTrendData 获取系统级趋势数据 - 为Dashboard提供聚合的趋势图表数据
+func getSystemTrendData(historyService *service.HistoryService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		hoursStr := c.DefaultQuery("hours", "24")
+		
+		hours, err := strconv.Atoi(hoursStr)
+		if err != nil || hours <= 0 {
+			hours = 24 // 默认24小时
+		}
+		
+		// 限制查询范围，避免性能问题
+		if hours > 168 { // 最大7天
+			hours = 168
+		}
+		
+		data, err := historyService.GetSystemTrendData(hours)
+		if err != nil {
+			logger.Error("获取系统趋势数据失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+		
+		logger.Info("系统趋势数据获取完成: hours=%d, data_points=%d", hours, len(data))
+		
+		response.OkWithData(gin.H{
+			"data":  data,
+			"hours": hours,
+			"count": len(data),
+		}, c)
 	}
 }
 
