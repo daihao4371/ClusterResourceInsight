@@ -172,6 +172,9 @@ export const useSystemStore = defineStore('system', () => {
   // 初始化示例数据（用于演示）
   const initializeSampleData = async () => {
     try {
+      // 先清理旧数据
+      await api.delete('/activities/cleanup')
+      // 生成新的示例数据
       await api.post('/activities/sample')
       // 重新获取数据
       await Promise.all([

@@ -247,10 +247,12 @@ export interface ActivityItem {
 
 // 告警类型
 export interface Alert {
+  id: number
   level: 'high' | 'medium' | 'low'
   title: string
   description: string
   time: string
+  status?: string
   progress?: number
 }
 

@@ -78,6 +78,7 @@ func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollec
 	activitiesGroup := r.Group("/activities")
 	{
 		activitiesGroup.GET("/recent", getRecentActivities(activityService)) // 获取最近活动
+		activitiesGroup.DELETE("/cleanup", cleanupOldActivitiesAndAlerts(activityService)) // 清理旧数据
 	}
 
 	alertsGroup := r.Group("/alerts")
@@ -1041,5 +1042,39 @@ func getAlertDetails(activityService *service.ActivityService) gin.HandlerFunc {
 		}
 
 		response.OkWithData(alert, c)
+	}
+}
+
+// generateSampleActivities 生成示例活动数据
+func generateSampleActivities(activityService *service.ActivityService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		err := activityService.GenerateRealtimeActivities()
+		if err != nil {
+			logger.Error("生成示例活动数据失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+
+		response.OkWithMessage("示例活动数据生成成功", c)
+	}
+}
+
+// cleanupOldActivitiesAndAlerts 清理旧的活动和告警数据
+func cleanupOldActivitiesAndAlerts(activityService *service.ActivityService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		retentionDaysStr := c.DefaultQuery("retention_days", "0") // 默认清理所有数据
+		retentionDays, err := strconv.Atoi(retentionDaysStr)
+		if err != nil {
+			retentionDays = 0
+		}
+
+		err = activityService.CleanupOldActivities(c.Request.Context(), retentionDays)
+		if err != nil {
+			logger.Error("清理旧数据失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+
+		response.OkWithMessage("旧数据清理完成", c)
 	}
 }

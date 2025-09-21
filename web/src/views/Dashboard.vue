@@ -112,6 +112,29 @@
           :activities="systemStore.realtimeActivities" 
           :loading="systemStore.activitiesLoading"
         />
+        
+        <!-- 如果没有活动数据，显示初始化按钮 -->
+        <div v-if="!systemStore.activitiesLoading && systemStore.realtimeActivities.length === 0" class="mt-4 text-center">
+          <button 
+            @click="initializeSampleData"
+            :disabled="initializingData"
+            class="btn-primary text-sm mr-2"
+          >
+            {{ initializingData ? '初始化中...' : '初始化示例数据' }}
+          </button>
+        </div>
+        
+        <!-- 如果有活动数据但告警按钮不工作，显示刷新按钮 -->
+        <div v-if="systemStore.realtimeActivities.length > 0 && systemStore.systemAlerts.some(alert => !alert.id)" class="mt-4 text-center">
+          <button 
+            @click="refreshAllData"
+            :disabled="refreshingData"
+            class="btn-secondary text-sm"
+          >
+            {{ refreshingData ? '刷新中...' : '刷新数据' }}
+          </button>
+          <p class="text-xs text-gray-500 mt-1">检测到数据异常，请刷新获取最新数据</p>
+        </div>
       </div>
       
       <!-- 系统告警 -->
@@ -229,6 +252,10 @@ const efficiencyTrend = ref('+1.2%')
 // 时间范围选择器状态
 const selectedTimeRange = ref('24') // 默认24小时
 
+// 初始化示例数据状态
+const initializingData = ref(false)
+const refreshingData = ref(false)
+
 const clusterData = computed(() => {
   const stats = systemStore.stats
   if (!stats || !stats.cluster_status_distribution || stats.cluster_status_distribution.length === 0) {
@@ -282,6 +309,36 @@ const handleDismissAlert = async (alert: any) => {
 const handleViewAlertDetail = (alert: any) => {
   // 跳转到告警页面
   router.push('/alerts')
+}
+
+// 初始化示例数据
+const initializeSampleData = async () => {
+  initializingData.value = true
+  try {
+    const success = await systemStore.initializeSampleData()
+    if (success) {
+      console.log('示例数据初始化成功')
+    } else {
+      console.error('示例数据初始化失败')
+    }
+  } catch (error) {
+    console.error('示例数据初始化失败:', error)
+  } finally {
+    initializingData.value = false
+  }
+}
+
+// 刷新所有数据
+const refreshAllData = async () => {
+  refreshingData.value = true
+  try {
+    await systemStore.refreshAllData()
+    console.log('数据刷新成功')
+  } catch (error) {
+    console.error('数据刷新失败:', error)
+  } finally {
+    refreshingData.value = false
+  }
 }
 
 onMounted(() => {

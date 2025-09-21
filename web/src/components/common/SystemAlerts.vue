@@ -119,10 +119,12 @@ import { computed } from 'vue'
 import { AlertTriangle, Check, X, ExternalLink, ShieldCheck } from 'lucide-vue-next'
 
 interface Alert {
+  id: number
   level: 'high' | 'medium' | 'low'
   title: string
   description: string
   time: string
+  status?: string
   progress?: number
 }
 
