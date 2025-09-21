@@ -61,7 +61,7 @@ func main() {
 		log.Fatalf("日志系统初始化失败: %v", err)
 	}
 	logger.Info("日志系统初始化完成，日志文件: %s", appConfig.Logging.File)
-	
+
 	// 从此处开始使用自定义logger
 	logger.Info("启动 K8s 多集群资源监控系统...")
 
@@ -120,22 +120,12 @@ func main() {
 	// 静态文件服务配置
 	// 首先检查是否存在构建后的dist目录
 	if _, err := http.Dir("./web/dist").Open("/"); err != nil {
-		// 如果没有dist目录，说明是开发模式，使用web-legacy作为备用
-		logger.Info("未找到Vue.js构建文件，使用传统web页面作为备用")
-		r.Static("/static", "./web-legacy/static")
-		r.LoadHTMLGlob("web-legacy/templates/*")
-
-		// 传统模式的路由
+		logger.Info("未找到Vue.js构建文件，跳过模板加载专注测试API")
 		r.GET("/", func(c *gin.Context) {
-			c.HTML(http.StatusOK, "index.html", gin.H{
-				"title": "K8s 多集群资源监控系统",
-			})
-		})
-
-		r.GET("/clusters", func(c *gin.Context) {
-			c.HTML(http.StatusOK, "clusters.html", gin.H{
-				"title": "集群管理",
-			})
+			response.OkWithData(gin.H{
+				"message": "API服务运行正常",
+				"service": "cluster-resource-insight",
+			}, c)
 		})
 	} else {
 		// Vue.js SPA模式
