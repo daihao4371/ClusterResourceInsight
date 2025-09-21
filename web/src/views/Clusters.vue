@@ -830,7 +830,8 @@ onMounted(() => {
 <style scoped>
 .cluster-card {
   @apply p-6 rounded-xl border backdrop-blur-sm cursor-pointer transition-all duration-300;
-  background: rgba(17, 24, 39, 0.8);
+  background-color: var(--bg-secondary);
+  border-color: var(--border-color);
 }
 
 .cluster-card:hover {
@@ -845,19 +846,50 @@ onMounted(() => {
 }
 
 .btn-secondary {
-  @apply px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  @apply px-4 py-2 rounded-lg transition-colors;
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-tertiary);
 }
 
 .btn-primary {
-  @apply px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-colors;
+  background-color: var(--accent-primary);
+  color: white;
+  @apply px-4 py-2 rounded-lg transition-colors;
+}
+
+.btn-primary:hover {
+  background-color: rgba(59, 130, 246, 0.8);
 }
 
 .btn-danger {
-  @apply px-4 py-2 bg-danger-600 hover:bg-danger-500 text-white rounded-lg transition-colors;
+  background-color: var(--error-color);
+  color: white;
+  @apply px-4 py-2 rounded-lg transition-colors;
+}
+
+.btn-danger:hover {
+  background-color: rgba(239, 68, 68, 0.8);
 }
 
 .input-field {
-  @apply w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-primary-500 focus:outline-none;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  @apply w-full px-3 py-2 rounded-lg focus:outline-none;
+}
+
+.input-field:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 1px var(--accent-primary);
+}
+
+.input-field::placeholder {
+  color: var(--text-muted);
 }
 
 /* 搜索框专用样式，确保文本与放大镜图标不重叠 */
@@ -866,33 +898,34 @@ onMounted(() => {
 }
 
 .glass-card {
-  @apply rounded-xl border border-gray-700/50 backdrop-blur-sm;
-  background: rgba(17, 24, 39, 0.8);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  @apply rounded-xl backdrop-blur-sm;
 }
 
 /* 状态指示器样式 */
 .status-online {
-  @apply bg-success-500;
+  background-color: var(--success-color);
   box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
 }
 
 .status-offline {
-  @apply bg-gray-500;
+  background-color: var(--text-muted);
 }
 
 .status-error {
-  @apply bg-danger-500;
+  background-color: var(--error-color);
   box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
 }
 
 .status-warning {
-  @apply bg-warning-500;
+  background-color: var(--warning-color);
   box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
 }
 
 /* 渐变样式 */
 .text-gradient {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

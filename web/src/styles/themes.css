@@ -379,9 +379,83 @@ table tr:hover {
   color: #1e293b !important;
 }
 
+/* Clusters页面特有样式覆盖 */
+:root[data-theme="light"] .bg-dark-700 {
+  background-color: var(--bg-secondary) !important;
+}
+
+:root[data-theme="light"] .bg-dark-800 {
+  background-color: var(--bg-secondary) !important;
+}
+
+:root[data-theme="light"] .border-gray-600 {
+  border-color: var(--border-color) !important;
+}
+
+:root[data-theme="light"] .border-gray-700 {
+  border-color: var(--border-color) !important;
+}
+
+/* 进度条背景颜色 */
+:root[data-theme="light"] .bg-dark-700 {
+  background-color: var(--bg-tertiary) !important;
+}
+
+/* 悬停效果覆盖 */
+:root[data-theme="light"] .hover\:bg-white\/10:hover {
+  background-color: var(--bg-tertiary) !important;
+  opacity: 0.7;
+}
+
+:root[data-theme="light"] .hover\:bg-dark-700:hover {
+  background-color: var(--bg-tertiary) !important;
+}
+
+/* 按钮样式覆盖 */
+:root[data-theme="light"] .bg-gray-600 {
+  background-color: var(--bg-secondary) !important;
+}
+
+:root[data-theme="light"] .hover\:bg-gray-500:hover {
+  background-color: var(--bg-tertiary) !important;
+}
+
 @media (prefers-color-scheme: light) {
   :root[data-theme="auto"] .text-white {
     color: #1e293b !important;
+  }
+  
+  :root[data-theme="auto"] .bg-dark-700 {
+    background-color: var(--bg-secondary) !important;
+  }
+  
+  :root[data-theme="auto"] .bg-dark-800 {
+    background-color: var(--bg-secondary) !important;
+  }
+  
+  :root[data-theme="auto"] .border-gray-600 {
+    border-color: var(--border-color) !important;
+  }
+  
+  :root[data-theme="auto"] .border-gray-700 {
+    border-color: var(--border-color) !important;
+  }
+  
+  :root[data-theme="auto"] .hover\:bg-white\/10:hover {
+    background-color: var(--bg-tertiary) !important;
+    opacity: 0.7;
+  }
+  
+  :root[data-theme="auto"] .hover\:bg-dark-700:hover {
+    background-color: var(--bg-tertiary) !important;
+  }
+  
+  :root[data-theme="auto"] .bg-gray-600 {
+    background-color: var(--bg-secondary) !important;
+  }
+  
+  :root[data-theme="auto"] .hover\:bg-gray-500:hover {
+    background-color: var(--bg-tertiary) !important;
   }
 }
 
