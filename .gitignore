@@ -7,6 +7,7 @@ node_modules/
 web/dist/
 web-legacy/dist/
 *.map
+web/前端生成页面prompt.md
 
 # Go编译产物
 bin/
@@ -58,6 +59,7 @@ yarn-error.log*
 需求文档.md
 PERFORMANCE_OPTIMIZATION.md
 DEPLOYMENT.md
+CLAUDE.md
 
 # 前端依赖锁定文件（根目录的package-lock.json不应该存在）
 package-lock.json
