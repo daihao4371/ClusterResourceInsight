@@ -195,6 +195,45 @@ export const useSystemStore = defineStore('system', () => {
     ])
   }
 
+  // 解决告警
+  const resolveAlert = async (alertId: number) => {
+    try {
+      await api.put(`/alerts/${alertId}/resolve`)
+      // 重新获取告警数据以更新状态
+      await fetchSystemAlerts()
+      return true
+    } catch (err: any) {
+      console.error('解决告警失败:', err)
+      return false
+    }
+  }
+
+  // 忽略告警
+  const dismissAlert = async (alertId: number) => {
+    try {
+      await api.put(`/alerts/${alertId}/dismiss`)
+      // 重新获取告警数据以更新状态
+      await fetchSystemAlerts()
+      return true
+    } catch (err: any) {
+      console.error('忽略告警失败:', err)
+      return false
+    }
+  }
+
+  // 更新告警状态
+  const updateAlertStatus = async (alertId: number, status: 'active' | 'resolved' | 'suppressed') => {
+    try {
+      await api.put(`/alerts/${alertId}/status`, { status })
+      // 重新获取告警数据以更新状态
+      await fetchSystemAlerts()
+      return true
+    } catch (err: any) {
+      console.error('更新告警状态失败:', err)
+      return false
+    }
+  }
+
   return {
     // 状态
     stats,
@@ -217,6 +256,9 @@ export const useSystemStore = defineStore('system', () => {
     removeNotification,
     clearNotifications,
     initializeSampleData,
-    refreshAllData
+    refreshAllData,
+    resolveAlert,
+    dismissAlert,
+    updateAlertStatus
   }
 })

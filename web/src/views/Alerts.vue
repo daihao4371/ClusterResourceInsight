@@ -315,14 +315,26 @@ const filterAlerts = () => {
   currentPage.value = 1
 }
 
-const resolveAlert = (alert) => {
-  // 这里可以调用API来解决告警
-  console.log('解决告警:', alert)
-  alert.status = 'resolved'
-  
-  // 如果模态框打开且是同一个告警，也要更新
-  if (selectedAlert.value && selectedAlert.value === alert) {
-    selectedAlert.value.status = 'resolved'
+const resolveAlert = async (alert) => {
+  try {
+    // 调用API来解决告警
+    const success = await systemStore.resolveAlert(alert.id)
+    if (success) {
+      // 更新本地状态
+      alert.status = 'resolved'
+      
+      // 如果模态框打开且是同一个告警，也要更新
+      if (selectedAlert.value && selectedAlert.value.id === alert.id) {
+        selectedAlert.value.status = 'resolved'
+      }
+      
+      // 可以添加成功提示
+      console.log('告警已标记为已解决')
+    } else {
+      console.error('解决告警失败')
+    }
+  } catch (error) {
+    console.error('解决告警失败:', error)
   }
 }
 

@@ -298,6 +298,77 @@ func (s *ActivityService) RecordResourceAlert(clusterID uint, clusterName, podNa
 	s.RecordActivity(activityType, title, message, "monitor", clusterID, details)
 }
 
+// UpdateAlertStatus 更新告警状态
+func (s *ActivityService) UpdateAlertStatus(alertID uint, status string) error {
+	// 验证状态值
+	if status != "active" && status != "resolved" && status != "suppressed" {
+		return fmt.Errorf("无效的告警状态: %s", status)
+	}
+	
+	// 更新告警状态
+	result := s.db.Model(&models.AlertHistory{}).
+		Where("id = ?", alertID).
+		Update("status", status)
+	
+	if result.Error != nil {
+		return fmt.Errorf("更新告警状态失败: %w", result.Error)
+	}
+	
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("未找到ID为 %d 的告警记录", alertID)
+	}
+	
+	// 记录操作活动
+	actionTitle := "告警状态更新"
+	actionMessage := fmt.Sprintf("告警ID %d 状态已更新为: %s", alertID, s.getStatusDisplayName(status))
+	s.RecordActivity("info", actionTitle, actionMessage, "api", 0, map[string]interface{}{
+		"alert_id":   alertID,
+		"new_status": status,
+	})
+	
+	logger.Info("告警状态更新成功: ID=%d, 新状态=%s", alertID, status)
+	return nil
+}
+
+// ResolveAlert 解决告警（将状态设置为resolved）
+func (s *ActivityService) ResolveAlert(alertID uint) error {
+	return s.UpdateAlertStatus(alertID, "resolved")
+}
+
+// DismissAlert 忽略告警（将状态设置为suppressed）
+func (s *ActivityService) DismissAlert(alertID uint) error {
+	return s.UpdateAlertStatus(alertID, "suppressed")
+}
+
+// GetAlertByID 根据ID获取告警详情
+func (s *ActivityService) GetAlertByID(alertID uint) (*models.AlertHistory, error) {
+	var alert models.AlertHistory
+	
+	result := s.db.Preload("Cluster").First(&alert, alertID)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("未找到ID为 %d 的告警记录", alertID)
+		}
+		return nil, fmt.Errorf("查询告警详情失败: %w", result.Error)
+	}
+	
+	return &alert, nil
+}
+
+// getStatusDisplayName 获取状态显示名称
+func (s *ActivityService) getStatusDisplayName(status string) string {
+	statusMap := map[string]string{
+		"active":     "活跃",
+		"resolved":   "已解决",
+		"suppressed": "已屏蔽",
+	}
+	
+	if display, exists := statusMap[status]; exists {
+		return display
+	}
+	return status
+}
+
 // CreateAlert 创建系统告警记录
 func (s *ActivityService) CreateAlert(clusterID uint, level, title, message, status string) error {
 	// 验证告警级别

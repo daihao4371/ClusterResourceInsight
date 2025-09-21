@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -76,12 +77,16 @@ func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollec
 	activityService := service.NewActivityService()
 	activitiesGroup := r.Group("/activities")
 	{
-		activitiesGroup.GET("/recent", getRecentActivities(activityService))        // 获取最近活动
+		activitiesGroup.GET("/recent", getRecentActivities(activityService)) // 获取最近活动
 	}
 
 	alertsGroup := r.Group("/alerts")
 	{
-		alertsGroup.GET("/recent", getRecentAlerts(activityService))                // 获取最近告警
+		alertsGroup.GET("/recent", getRecentAlerts(activityService))       // 获取最近告警
+		alertsGroup.PUT("/:id/status", updateAlertStatus(activityService)) // 更新告警状态
+		alertsGroup.PUT("/:id/resolve", resolveAlert(activityService))     // 解决告警
+		alertsGroup.PUT("/:id/dismiss", dismissAlert(activityService))     // 忽略告警
+		alertsGroup.GET("/:id", getAlertDetails(activityService))          // 获取告警详情
 	}
 
 	// 集群管理接口
@@ -277,7 +282,7 @@ func getResourceAnalysis(resourceCollector *collector.ResourceCollector) gin.Han
 		// 使用统一的分页处理器解析分页参数
 		paginationHandler := utils.NewHttpPaginationHandler()
 		paginationParams := paginationHandler.ParsePaginationParams(c, 50)
-		
+
 		clusterName := c.Query("cluster_name")
 
 		// 使用多集群收集器获取数据
@@ -413,7 +418,6 @@ func getSystemStats(resourceCollector *collector.ResourceCollector) gin.HandlerF
 		response.OkWithData(stats, c)
 	}
 }
-
 
 // 资源统计相关handlers
 func getTopMemoryRequestPods(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
@@ -812,7 +816,7 @@ func getProblemsWithPagination(multiCollector *collector.MultiClusterResourceCol
 		// 使用统一的分页处理器解析分页参数
 		paginationHandler := utils.NewHttpPaginationHandler()
 		paginationParams := paginationHandler.ParsePaginationParams(c, 10)
-		
+
 		clusterName := c.Query("cluster_name")
 		sortBy := c.DefaultQuery("sort_by", "total_waste")
 
@@ -859,26 +863,26 @@ func getProblemsWithPagination(multiCollector *collector.MultiClusterResourceCol
 func getSystemTrendData(historyService *service.HistoryService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		hoursStr := c.DefaultQuery("hours", "24")
-		
+
 		hours, err := strconv.Atoi(hoursStr)
 		if err != nil || hours <= 0 {
 			hours = 24 // 默认24小时
 		}
-		
+
 		// 限制查询范围，避免性能问题
 		if hours > 168 { // 最大7天
 			hours = 168
 		}
-		
+
 		data, err := historyService.GetSystemTrendData(hours)
 		if err != nil {
 			logger.Error("获取系统趋势数据失败: %v", err)
 			response.InternalServerError(err.Error(), c)
 			return
 		}
-		
+
 		logger.Info("系统趋势数据获取完成: hours=%d, data_points=%d", hours, len(data))
-		
+
 		response.OkWithData(gin.H{
 			"data":  data,
 			"hours": hours,
@@ -934,4 +938,108 @@ func getRecentAlerts(activityService *service.ActivityService) gin.HandlerFunc {
 	}
 }
 
+// updateAlertStatus 更新告警状态
+func updateAlertStatus(activityService *service.ActivityService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 获取告警ID
+		alertIDStr := c.Param("id")
+		alertID, err := strconv.ParseUint(alertIDStr, 10, 32)
+		if err != nil {
+			response.BadRequest("无效的告警ID", c)
+			return
+		}
 
+		// 解析请求体
+		var req struct {
+			Status string `json:"status" binding:"required"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			response.BadRequest("请求参数错误: "+err.Error(), c)
+			return
+		}
+
+		// 更新告警状态
+		err = activityService.UpdateAlertStatus(uint(alertID), req.Status)
+		if err != nil {
+			logger.Error("更新告警状态失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+
+		response.OkWithMessage("告警状态更新成功", c)
+	}
+}
+
+// resolveAlert 解决告警
+func resolveAlert(activityService *service.ActivityService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 获取告警ID
+		alertIDStr := c.Param("id")
+		alertID, err := strconv.ParseUint(alertIDStr, 10, 32)
+		if err != nil {
+			response.BadRequest("无效的告警ID", c)
+			return
+		}
+
+		// 解决告警
+		err = activityService.ResolveAlert(uint(alertID))
+		if err != nil {
+			logger.Error("解决告警失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+
+		response.OkWithMessage("告警已标记为已解决", c)
+	}
+}
+
+// dismissAlert 忽略告警
+func dismissAlert(activityService *service.ActivityService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 获取告警ID
+		alertIDStr := c.Param("id")
+		alertID, err := strconv.ParseUint(alertIDStr, 10, 32)
+		if err != nil {
+			response.BadRequest("无效的告警ID", c)
+			return
+		}
+
+		// 忽略告警
+		err = activityService.DismissAlert(uint(alertID))
+		if err != nil {
+			logger.Error("忽略告警失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+
+		response.OkWithMessage("告警已忽略", c)
+	}
+}
+
+// getAlertDetails 获取告警详情
+func getAlertDetails(activityService *service.ActivityService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 获取告警ID
+		alertIDStr := c.Param("id")
+		alertID, err := strconv.ParseUint(alertIDStr, 10, 32)
+		if err != nil {
+			response.BadRequest("无效的告警ID", c)
+			return
+		}
+
+		// 获取告警详情
+		alert, err := activityService.GetAlertByID(uint(alertID))
+		if err != nil {
+			logger.Error("获取告警详情失败: %v", err)
+			if err.Error() == fmt.Sprintf("未找到ID为 %d 的告警记录", alertID) {
+				response.NotFound("告警记录不存在", c)
+			} else {
+				response.InternalServerError(err.Error(), c)
+			}
+			return
+		}
+
+		response.OkWithData(alert, c)
+	}
+}

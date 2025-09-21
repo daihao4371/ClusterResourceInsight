@@ -44,24 +44,24 @@
             </span>
             
             <!-- 快速操作 -->
-            <div class="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div class="flex space-x-1 opacity-60 group-hover:opacity-100 transition-opacity">
               <button 
                 @click.stop="$emit('resolve-alert', alert)"
-                class="p-1 hover:bg-white/10 rounded transition-colors"
+                class="p-1 hover:bg-white/10 rounded transition-colors hover:scale-110 active:scale-95"
                 title="标记为已解决"
               >
                 <Check class="w-3 h-3 text-success-400" />
               </button>
               <button 
                 @click.stop="$emit('dismiss-alert', alert)"
-                class="p-1 hover:bg-white/10 rounded transition-colors"
+                class="p-1 hover:bg-white/10 rounded transition-colors hover:scale-110 active:scale-95"
                 title="忽略告警"
               >
                 <X class="w-3 h-3 text-gray-400" />
               </button>
               <button 
                 @click.stop="$emit('view-detail', alert)"
-                class="p-1 hover:bg-white/10 rounded transition-colors"
+                class="p-1 hover:bg-white/10 rounded transition-colors hover:scale-110 active:scale-95"
                 title="查看详情"
               >
                 <ExternalLink class="w-3 h-3 text-primary-400" />

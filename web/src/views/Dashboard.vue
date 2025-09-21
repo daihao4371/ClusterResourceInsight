@@ -125,6 +125,9 @@
         <SystemAlerts 
           :alerts="systemStore.systemAlerts" 
           :loading="systemStore.alertsLoading"
+          @resolve-alert="handleResolveAlert"
+          @dismiss-alert="handleDismissAlert"
+          @view-detail="handleViewAlertDetail"
         />
       </div>
     </div>
@@ -179,6 +182,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { Server, Box, AlertTriangle, Activity, BarChart3, Calendar } from 'lucide-vue-next'
 import { useSystemStore } from '../stores/system'
 import MetricCard from '../components/common/MetricCard.vue'
@@ -188,6 +192,7 @@ import RealtimeActivity from '../components/common/RealtimeActivity.vue'
 import SystemAlerts from '../components/common/SystemAlerts.vue'
 
 const systemStore = useSystemStore()
+const router = useRouter()
 
 // 计算属性
 const clusterStatus = computed(() => {
@@ -241,6 +246,42 @@ const clusterData = computed(() => {
 const onTimeRangeChange = () => {
   const hours = parseInt(selectedTimeRange.value)
   systemStore.fetchTrendData(hours)
+}
+
+// 处理解决告警
+const handleResolveAlert = async (alert: any) => {
+  try {
+    const success = await systemStore.resolveAlert(alert.id)
+    if (success) {
+      console.log('告警已标记为已解决')
+      // 可以添加成功提示
+    } else {
+      console.error('解决告警失败')
+    }
+  } catch (error) {
+    console.error('解决告警失败:', error)
+  }
+}
+
+// 处理忽略告警
+const handleDismissAlert = async (alert: any) => {
+  try {
+    const success = await systemStore.dismissAlert(alert.id)
+    if (success) {
+      console.log('告警已忽略')
+      // 可以添加成功提示
+    } else {
+      console.error('忽略告警失败')
+    }
+  } catch (error) {
+    console.error('忽略告警失败:', error)
+  }
+}
+
+// 处理查看告警详情
+const handleViewAlertDetail = (alert: any) => {
+  // 跳转到告警页面
+  router.push('/alerts')
 }
 
 onMounted(() => {
