@@ -84,7 +84,7 @@ type AlertRule struct {
 // AlertHistory 告警历史记录表模型
 type AlertHistory struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
-	RuleID      uint      `gorm:"index" json:"rule_id"`                          // 告警规则ID
+	RuleID      *uint     `gorm:"index" json:"rule_id"`                          // 告警规则ID，可为空
 	ClusterID   uint      `gorm:"index" json:"cluster_id"`                       // 集群ID
 	AlertLevel  string    `gorm:"size:20" json:"alert_level"`                    // 告警级别
 	Title       string    `gorm:"size:255" json:"title"`                         // 告警标题
@@ -96,7 +96,22 @@ type AlertHistory struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 	
 	// 外键关联
-	Rule        AlertRule     `gorm:"foreignKey:RuleID" json:"rule,omitempty"`
+	Rule        *AlertRule    `gorm:"foreignKey:RuleID" json:"rule,omitempty"`
+	Cluster     ClusterConfig `gorm:"foreignKey:ClusterID" json:"cluster,omitempty"`
+}
+
+// SystemActivity 系统活动记录表模型
+type SystemActivity struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Type        string    `gorm:"size:20;not null;index" json:"type"`            // 活动类型：success/warning/error/info
+	ClusterID   uint      `gorm:"index" json:"cluster_id"`                       // 集群ID，可选
+	Title       string    `gorm:"size:255;not null" json:"title"`                // 活动标题
+	Message     string    `gorm:"type:text" json:"message"`                      // 活动详情
+	Source      string    `gorm:"size:50" json:"source"`                         // 来源：collector/scheduler/api/system
+	Details     string    `gorm:"type:json" json:"details"`                      // 详细信息（JSON格式）
+	CreatedAt   time.Time `gorm:"index" json:"created_at"`
+	
+	// 外键关联
 	Cluster     ClusterConfig `gorm:"foreignKey:ClusterID" json:"cluster,omitempty"`
 }
 
@@ -119,4 +134,8 @@ func (AlertRule) TableName() string {
 
 func (AlertHistory) TableName() string {
 	return "alert_history"
+}
+
+func (SystemActivity) TableName() string {
+	return "system_activities"
 }

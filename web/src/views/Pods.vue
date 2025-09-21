@@ -1,398 +1,431 @@
 <template>
-  <div class="pods-container">
-    <!-- 页面头部 -->
-    <div class="page-header">
-      <div class="header-left">
-        <h1>Pod管理</h1>
-        <p class="subtitle">查看和管理集群中的所有Pod资源</p>
+  <div class="space-y-4 animate-fade-in">
+    <!-- 页面标题和操作 -->
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-gradient">Pod监控</h1>
+        <p class="text-gray-400 text-sm">实时监控所有Pod状态和资源使用情况</p>
       </div>
-      <div class="header-actions">
-        <el-button @click="refreshPods" :loading="loading" :icon="Refresh">
-          刷新
-        </el-button>
+      
+      <div class="flex items-center space-x-3">
+        <button class="btn-secondary">
+          <RefreshCw class="w-4 h-4 mr-2" />
+          刷新数据
+        </button>
+        <button class="btn-secondary">
+          <Download class="w-4 h-4 mr-2" />
+          导出报告
+        </button>
       </div>
     </div>
 
+    <!-- 统计概览 -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <MetricCard
+        title="运行中的Pod"
+        :value="podStats.running"
+        icon="Box"
+        status="success"
+        trend="+2.5%"
+      />
+      <MetricCard
+        title="待调度Pod"
+        :value="podStats.pending"
+        icon="Clock"
+        status="warning"
+        trend="-12%"
+      />
+      <MetricCard
+        title="失败Pod"
+        :value="podStats.failed"
+        icon="AlertTriangle"
+        status="error"
+        trend="-8.3%"
+      />
+      <MetricCard
+        title="CPU使用率"
+        :value="podStats.avgCpuUsage"
+        unit="%"
+        icon="Activity"
+        :status="podStats.avgCpuUsage > 80 ? 'error' : 'success'"
+        trend="+1.2%"
+      />
+    </div>
+
     <!-- 筛选和搜索 -->
-    <el-card class="filter-card">
-      <div class="filter-section">
-        <div class="filter-group">
-          <label>集群:</label>
-          <el-select v-model="searchParams.cluster" placeholder="全部集群" clearable @change="searchPods">
-            <el-option label="全部集群" value="" />
-            <el-option 
-              v-for="cluster in clusters" 
-              :key="cluster"
-              :label="cluster" 
-              :value="cluster" 
+    <div class="glass-card p-4">
+      <div class="flex flex-wrap items-center gap-4">
+        <div class="flex-1 min-w-64">
+          <div class="relative">
+            <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="搜索Pod名称、命名空间..."
+              class="input-field pl-10"
             />
-          </el-select>
+          </div>
         </div>
         
-        <div class="filter-group">
-          <label>命名空间:</label>
-          <el-select v-model="searchParams.namespace" placeholder="全部命名空间" clearable @change="searchPods">
-            <el-option label="全部命名空间" value="" />
-            <el-option 
-              v-for="ns in namespaces" 
-              :key="ns"
-              :label="ns" 
-              :value="ns" 
-            />
-          </el-select>
-        </div>
+        <select v-model="statusFilter" class="input-field">
+          <option value="">所有状态</option>
+          <option value="Running">运行中</option>
+          <option value="Pending">待调度</option>
+          <option value="Failed">失败</option>
+          <option value="Succeeded">成功</option>
+        </select>
         
-        <div class="filter-group">
-          <el-input
-            v-model="searchParams.query"
-            placeholder="搜索Pod名称..."
-            :prefix-icon="Search"
-            clearable
-            @input="debounceSearch"
-          />
-        </div>
+        <select v-model="namespaceFilter" class="input-field">
+          <option value="">所有命名空间</option>
+          <option value="default">default</option>
+          <option value="kube-system">kube-system</option>
+          <option value="monitoring">monitoring</option>
+          <option value="production">production</option>
+        </select>
         
-        <div class="filter-group">
-          <el-input-number
-            v-model="searchParams.size"
-            :min="10"
-            :max="100"
-            :step="10"
-            controls-position="right"
-            style="width: 120px"
-            @change="searchPods"
-          />
-          <span style="margin-left: 8px; color: #909399;">条/页</span>
-        </div>
+        <select v-model="clusterFilter" class="input-field">
+          <option value="">所有集群</option>
+          <option value="prod-cluster-01">prod-cluster-01</option>
+          <option value="dev-cluster-02">dev-cluster-02</option>
+          <option value="test-cluster-03">test-cluster-03</option>
+        </select>
       </div>
-    </el-card>
+    </div>
 
-    <!-- Pod列表 -->
-    <el-card class="pods-table-card">
-      <template #header>
-        <div class="card-header">
-          <span>Pod列表 ({{ podSearchResult?.total || 0 }})</span>
-        </div>
-      </template>
-
-      <el-table
-        v-loading="loading"
-        :data="podSearchResult?.pods || []"
-        style="width: 100%"
-        empty-text="暂无Pod数据"
-      >
-        <el-table-column prop="cluster_name" label="集群" width="100" />
-        
-        <el-table-column prop="namespace" label="命名空间" width="120" />
-        
-        <el-table-column prop="pod_name" label="Pod名称" width="200" show-overflow-tooltip />
-        
-        <el-table-column prop="node_name" label="节点" width="120" show-overflow-tooltip />
-        
-        <el-table-column label="内存使用" width="140" align="center">
-          <template #default="{ row }">
-            <div class="resource-usage">
-              <div class="usage-bar">
-                <el-progress
-                  :percentage="Math.min(row.memory_req_pct, 100)"
-                  :status="row.memory_req_pct < 20 ? 'exception' : row.memory_req_pct > 80 ? 'warning' : 'success'"
-                  :stroke-width="6"
-                  :show-text="false"
-                />
-              </div>
-              <div class="usage-text">
-                <span class="current">{{ formatBytes(row.memory_usage) }}</span>
-                <span class="total">/ {{ formatBytes(row.memory_request) }}</span>
-              </div>
-              <div class="usage-percent">{{ row.memory_req_pct.toFixed(1) }}%</div>
-            </div>
-          </template>
-        </el-table-column>
-        
-        <el-table-column label="CPU使用" width="140" align="center">
-          <template #default="{ row }">
-            <div class="resource-usage">
-              <div class="usage-bar">
-                <el-progress
-                  :percentage="Math.min(row.cpu_req_pct, 100)"
-                  :status="row.cpu_req_pct < 15 ? 'exception' : row.cpu_req_pct > 80 ? 'warning' : 'success'"
-                  :stroke-width="6"
-                  :show-text="false"
-                />
-              </div>
-              <div class="usage-text">
-                <span class="current">{{ formatCPU(row.cpu_usage) }}</span>
-                <span class="total">/ {{ formatCPU(row.cpu_request) }}</span>
-              </div>
-              <div class="usage-percent">{{ row.cpu_req_pct.toFixed(1) }}%</div>
-            </div>
-          </template>
-        </el-table-column>
-        
-        <el-table-column prop="status" label="状态" width="80" align="center">
-          <template #default="{ row }">
-            <el-tag :type="row.status === '合理' ? 'success' : 'warning'" size="small">
-              {{ row.status }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        
-        <el-table-column prop="issues" label="问题" min-width="200">
-          <template #default="{ row }">
-            <div v-if="row.issues && row.issues.length > 0" class="issues-container">
-              <el-tag 
-                v-for="issue in row.issues.slice(0, 3)" 
-                :key="issue"
-                type="warning" 
-                size="small"
-                class="issue-tag"
-              >
-                {{ issue }}
-              </el-tag>
-              <span v-if="row.issues.length > 3" class="more-issues">
-                +{{ row.issues.length - 3 }}个问题
-              </span>
-            </div>
-            <span v-else class="no-issues">无问题</span>
-          </template>
-        </el-table-column>
-        
-        <el-table-column prop="creation_time" label="创建时间" width="160">
-          <template #default="{ row }">
-            {{ formatDate(row.creation_time) }}
-          </template>
-        </el-table-column>
-      </el-table>
-
+    <!-- Pod列表表格 -->
+    <div class="glass-card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead class="bg-dark-800/50">
+            <tr class="border-b border-gray-700">
+              <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Pod信息
+              </th>
+              <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                状态
+              </th>
+              <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                资源使用
+              </th>
+              <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                重启次数
+              </th>
+              <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                运行时间
+              </th>
+              <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                操作
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-700">
+            <tr
+              v-for="pod in filteredPods"
+              :key="pod.id"
+              class="hover:bg-white/5 transition-colors"
+            >
+              <!-- Pod信息 -->
+              <td class="px-6 py-4">
+                <div class="flex items-center space-x-3">
+                  <div 
+                    class="status-indicator"
+                    :class="getStatusIndicatorClass(pod.status)"
+                  ></div>
+                  <div>
+                    <div class="font-medium text-white">{{ pod.name }}</div>
+                    <div class="text-sm text-gray-400">{{ pod.namespace }}/{{ pod.cluster }}</div>
+                  </div>
+                </div>
+              </td>
+              
+              <!-- 状态 -->
+              <td class="px-6 py-4">
+                <span 
+                  class="px-2 py-1 text-xs font-medium rounded-full"
+                  :class="getStatusBadgeClass(pod.status)"
+                >
+                  {{ pod.status }}
+                </span>
+              </td>
+              
+              <!-- 资源使用 -->
+              <td class="px-6 py-4">
+                <div class="space-y-2">
+                  <div class="flex items-center space-x-2">
+                    <span class="text-xs text-gray-400 w-12">CPU:</span>
+                    <div class="flex-1 bg-dark-700 rounded-full h-1.5 max-w-20">
+                      <div 
+                        class="h-1.5 rounded-full transition-all duration-1000"
+                        :class="getResourceBarClass(pod.cpuUsage)"
+                        :style="{ width: `${pod.cpuUsage}%` }"
+                      ></div>
+                    </div>
+                    <span class="text-xs text-gray-300 w-10">{{ pod.cpuUsage }}%</span>
+                  </div>
+                  <div class="flex items-center space-x-2">
+                    <span class="text-xs text-gray-400 w-12">MEM:</span>
+                    <div class="flex-1 bg-dark-700 rounded-full h-1.5 max-w-20">
+                      <div 
+                        class="h-1.5 rounded-full transition-all duration-1000"
+                        :class="getResourceBarClass(pod.memoryUsage)"
+                        :style="{ width: `${pod.memoryUsage}%` }"
+                      ></div>
+                    </div>
+                    <span class="text-xs text-gray-300 w-10">{{ pod.memoryUsage }}%</span>
+                  </div>
+                </div>
+              </td>
+              
+              <!-- 重启次数 -->
+              <td class="px-6 py-4">
+                <span 
+                  class="text-sm"
+                  :class="pod.restarts > 0 ? 'text-warning-400' : 'text-gray-300'"
+                >
+                  {{ pod.restarts }}
+                </span>
+              </td>
+              
+              <!-- 运行时间 -->
+              <td class="px-6 py-4 text-sm text-gray-300">
+                {{ formatDistanceToNow(pod.startTime) }}
+              </td>
+              
+              <!-- 操作 -->
+              <td class="px-6 py-4">
+                <div class="flex items-center space-x-2">
+                  <button 
+                    @click="viewPodDetail(pod)"
+                    class="p-1 hover:bg-white/10 rounded transition-colors"
+                    title="查看详情"
+                  >
+                    <Eye class="w-4 h-4 text-primary-400" />
+                  </button>
+                  <button 
+                    @click="viewPodLogs(pod)"
+                    class="p-1 hover:bg-white/10 rounded transition-colors"
+                    title="查看日志"
+                  >
+                    <FileText class="w-4 h-4 text-success-400" />
+                  </button>
+                  <button 
+                    v-if="pod.status === 'Failed'"
+                    @click="restartPod(pod)"
+                    class="p-1 hover:bg-white/10 rounded transition-colors"
+                    title="重启Pod"
+                  >
+                    <RotateCw class="w-4 h-4 text-warning-400" />
+                  </button>
+                  <button 
+                    @click="deletePod(pod)"
+                    class="p-1 hover:bg-white/10 rounded transition-colors"
+                    title="删除Pod"
+                  >
+                    <Trash2 class="w-4 h-4 text-danger-400" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      
       <!-- 分页 -->
-      <div class="pagination-container" v-if="podSearchResult">
-        <el-pagination
-          v-model:current-page="searchParams.page"
-          :page-size="searchParams.size"
-          :total="podSearchResult.total"
-          layout="total, prev, pager, next, jumper"
-          @current-change="handlePageChange"
-        />
+      <div class="px-6 py-4 border-t border-gray-700 flex items-center justify-between">
+        <div class="text-sm text-gray-400">
+          显示 {{ (currentPage - 1) * pageSize + 1 }} - {{ Math.min(currentPage * pageSize, filteredPods.length) }} 
+          共 {{ filteredPods.length }} 条
+        </div>
+        <div class="flex items-center space-x-2">
+          <button 
+            @click="currentPage--"
+            :disabled="currentPage === 1"
+            class="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            上一页
+          </button>
+          <span class="text-sm text-gray-400">
+            {{ currentPage }} / {{ totalPages }}
+          </span>
+          <button 
+            @click="currentPage++"
+            :disabled="currentPage === totalPages"
+            class="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            下一页
+          </button>
+        </div>
       </div>
-    </el-card>
+    </div>
+
+    <!-- 空状态 -->
+    <div v-if="filteredPods.length === 0" class="text-center py-12">
+      <Box class="w-16 h-16 text-gray-600 mx-auto mb-4" />
+      <h3 class="text-lg font-semibold text-gray-400 mb-2">暂无Pod数据</h3>
+      <p class="text-gray-500">{{ searchQuery ? '未找到匹配的Pod' : '当前没有运行的Pod' }}</p>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Refresh, Search } from '@element-plus/icons-vue'
-import { podApi } from '@/api'
-import type { PodSearchRequest, PodSearchResponse } from '@/types'
+import { ref, computed } from 'vue'
+import { 
+  Box,
+  Clock,
+  AlertTriangle,
+  Activity,
+  Search,
+  RefreshCw,
+  Download,
+  Eye,
+  FileText,
+  RotateCw,
+  Trash2
+} from 'lucide-vue-next'
+import MetricCard from '../components/common/MetricCard.vue'
+import { formatDistanceToNow } from '../utils/date'
 
-// 响应式数据
-const loading = ref(false)
-const podSearchResult = ref<PodSearchResponse | null>(null)
-
-// 搜索参数
-const searchParams = reactive<PodSearchRequest>({
-  query: '',
-  namespace: '',
-  cluster: '',
-  page: 1,
-  size: 20
-})
-
-// 用于防抖的引用
-let searchTimeout: number | null = null
-
-// 计算属性 - 提取唯一的集群和命名空间列表
-const clusters = computed(() => {
-  if (!podSearchResult.value?.pods) return []
-  const clusterSet = new Set(podSearchResult.value.pods.map(pod => pod.cluster_name))
-  return Array.from(clusterSet).sort()
-})
-
-const namespaces = computed(() => {
-  if (!podSearchResult.value?.pods) return []
-  const nsSet = new Set(podSearchResult.value.pods.map(pod => pod.namespace))
-  return Array.from(nsSet).sort()
-})
-
-// 工具函数
-const formatBytes = (bytes: number): string => {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+interface Pod {
+  id: string
+  name: string
+  namespace: string
+  cluster: string
+  status: 'Running' | 'Pending' | 'Failed' | 'Succeeded'
+  cpuUsage: number
+  memoryUsage: number
+  restarts: number
+  startTime: string
 }
 
-const formatCPU = (millicores: number): string => {
-  if (millicores >= 1000) {
-    return parseFloat((millicores / 1000).toFixed(2)) + ' 核'
+// 筛选状态
+const searchQuery = ref('')
+const statusFilter = ref('')
+const namespaceFilter = ref('')
+const clusterFilter = ref('')
+
+// 分页
+const currentPage = ref(1)
+const pageSize = ref(20)
+
+// 统计数据
+const podStats = ref({
+  running: 245,
+  pending: 12,
+  failed: 8,
+  avgCpuUsage: 68
+})
+
+// 模拟Pod数据
+const pods = ref<Pod[]>([
+  {
+    id: '1',
+    name: 'nginx-deployment-7d6c4f8d9b-abc12',
+    namespace: 'production',
+    cluster: 'prod-cluster-01',
+    status: 'Running',
+    cpuUsage: 45,
+    memoryUsage: 62,
+    restarts: 0,
+    startTime: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: '2',
+    name: 'api-service-6b8f5c9d8e-def34',
+    namespace: 'production',
+    cluster: 'prod-cluster-01',
+    status: 'Running',
+    cpuUsage: 78,
+    memoryUsage: 84,
+    restarts: 2,
+    startTime: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: '3',
+    name: 'worker-job-5c7d4e9f2a-ghi56',
+    namespace: 'default',
+    cluster: 'dev-cluster-02',
+    status: 'Failed',
+    cpuUsage: 0,
+    memoryUsage: 0,
+    restarts: 5,
+    startTime: new Date(Date.now() - 30 * 60 * 1000).toISOString()
   }
-  return millicores + 'm'
-}
+])
 
-const formatDate = (dateStr: string): string => {
-  return new Date(dateStr).toLocaleString('zh-CN')
-}
-
-// 业务逻辑函数
-const searchPods = async () => {
-  try {
-    loading.value = true
-    const response = await podApi.searchPods(searchParams) as any
-    podSearchResult.value = response
-  } catch (error) {
-    console.error('搜索Pod失败:', error)
-    ElMessage.error('获取Pod列表失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-const debounceSearch = () => {
-  if (searchTimeout) {
-    clearTimeout(searchTimeout)
-  }
-  searchTimeout = setTimeout(() => {
-    searchParams.page = 1  // 搜索时重置到第一页
-    searchPods()
-  }, 500)
-}
-
-const refreshPods = () => {
-  searchPods()
-}
-
-const handlePageChange = (page: number) => {
-  searchParams.page = page
-  searchPods()
-}
-
-// 组件挂载时加载数据
-onMounted(() => {
-  searchPods()
+// 筛选后的Pod列表
+const filteredPods = computed(() => {
+  return pods.value.filter(pod => {
+    const matchesSearch = !searchQuery.value || 
+      pod.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      pod.namespace.toLowerCase().includes(searchQuery.value.toLowerCase())
+    
+    const matchesStatus = !statusFilter.value || pod.status === statusFilter.value
+    const matchesNamespace = !namespaceFilter.value || pod.namespace === namespaceFilter.value
+    const matchesCluster = !clusterFilter.value || pod.cluster === clusterFilter.value
+    
+    return matchesSearch && matchesStatus && matchesNamespace && matchesCluster
+  })
 })
+
+// 总页数
+const totalPages = computed(() => Math.ceil(filteredPods.value.length / pageSize.value))
+
+// 样式方法
+const getStatusIndicatorClass = (status: Pod['status']) => {
+  const classes = {
+    Running: 'status-online',
+    Pending: 'status-warning',
+    Failed: 'status-error',
+    Succeeded: 'status-online'
+  }
+  return classes[status]
+}
+
+const getStatusBadgeClass = (status: Pod['status']) => {
+  const classes = {
+    Running: 'bg-success-500/20 text-success-400 border border-success-500/30',
+    Pending: 'bg-warning-500/20 text-warning-400 border border-warning-500/30',
+    Failed: 'bg-danger-500/20 text-danger-400 border border-danger-500/30',
+    Succeeded: 'bg-success-500/20 text-success-400 border border-success-500/30'
+  }
+  return classes[status]
+}
+
+const getResourceBarClass = (usage: number) => {
+  if (usage >= 80) return 'bg-gradient-to-r from-danger-600 to-danger-400'
+  if (usage >= 60) return 'bg-gradient-to-r from-warning-600 to-warning-400'
+  return 'bg-gradient-to-r from-success-600 to-success-400'
+}
+
+// 操作方法
+const viewPodDetail = (pod: Pod) => {
+  console.log('查看Pod详情:', pod)
+}
+
+const viewPodLogs = (pod: Pod) => {
+  console.log('查看Pod日志:', pod)
+}
+
+const restartPod = (pod: Pod) => {
+  console.log('重启Pod:', pod)
+}
+
+const deletePod = (pod: Pod) => {
+  console.log('删除Pod:', pod)
+}
 </script>
 
 <style scoped>
-.pods-container {
-  max-width: 1200px;
-  margin: 0 auto;
+table {
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 20px;
+th:first-child {
+  border-top-left-radius: 0.5rem;
 }
 
-.header-left h1 {
-  margin: 0 0 4px 0;
-  color: #303133;
-}
-
-.subtitle {
-  margin: 0;
-  color: #909399;
-  font-size: 14px;
-}
-
-.header-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.filter-card {
-  margin-bottom: 20px;
-}
-
-.filter-section {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  align-items: center;
-}
-
-.filter-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.filter-group label {
-  font-size: 14px;
-  color: #606266;
-  white-space: nowrap;
-}
-
-.filter-group .el-select,
-.filter-group .el-input {
-  width: 160px;
-}
-
-.pods-table-card {
-  margin-bottom: 20px;
-}
-
-.card-header {
-  font-weight: bold;
-}
-
-.resource-usage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.usage-bar {
-  width: 100px;
-}
-
-.usage-text {
-  font-size: 11px;
-  color: #606266;
-}
-
-.usage-text .current {
-  font-weight: bold;
-  color: #303133;
-}
-
-.usage-text .total {
-  color: #909399;
-}
-
-.usage-percent {
-  font-size: 11px;
-  font-weight: bold;
-  color: #303133;
-}
-
-.issues-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
-}
-
-.issue-tag {
-  margin-bottom: 2px;
-}
-
-.more-issues {
-  font-size: 12px;
-  color: #909399;
-}
-
-.no-issues {
-  color: #67c23a;
-  font-size: 12px;
-}
-
-.pagination-container {
-  display: flex;
-  justify-content: center;
-  margin-top: 20px;
+th:last-child {
+  border-top-right-radius: 0.5rem;
 }
 </style>

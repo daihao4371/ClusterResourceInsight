@@ -1,12 +1,13 @@
 package service
 
 import (
-	"cluster-resource-insight/internal/models"
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
+
+	"cluster-resource-insight/internal/logger"
+	"cluster-resource-insight/internal/models"
 )
 
 // ScheduleJobInfo API响应用的调度任务信息（不包含内部字段）
@@ -101,7 +102,7 @@ func (ss *ScheduleService) Start(ctx context.Context) error {
 		return fmt.Errorf("调度服务已在运行中")
 	}
 
-	log.Println("启动定时调度服务...")
+	logger.Info("启动定时调度服务...")
 
 	// 加载集群配置并创建调度任务
 	if err := ss.loadClusterJobs(); err != nil {
@@ -116,7 +117,7 @@ func (ss *ScheduleService) Start(ctx context.Context) error {
 	go ss.managementLoop(ctx)
 
 	ss.running = true
-	log.Printf("定时调度服务启动完成，共管理 %d 个集群任务", len(ss.jobs))
+	logger.Info("定时调度服务启动完成，共管理 %d 个集群任务", len(ss.jobs))
 
 	return nil
 }
@@ -130,7 +131,7 @@ func (ss *ScheduleService) Stop() error {
 		return fmt.Errorf("调度服务未运行")
 	}
 
-	log.Println("正在停止定时调度服务...")
+	logger.Info("正在停止定时调度服务...")
 
 	// 发送停止信号
 	close(ss.stopChan)
@@ -139,7 +140,7 @@ func (ss *ScheduleService) Stop() error {
 	ss.stopAllJobs()
 
 	ss.running = false
-	log.Println("定时调度服务已停止")
+	logger.Info("定时调度服务已停止")
 
 	return nil
 }
@@ -174,7 +175,7 @@ func (ss *ScheduleService) loadClusterJobs() error {
 		}
 
 		ss.jobs[cluster.ID] = job
-		log.Printf("创建集群 %s (ID: %d) 的调度任务，间隔: %v", cluster.ClusterName, cluster.ID, interval)
+		logger.Info("创建集群 %s (ID: %d) 的调度任务，间隔: %v", cluster.ClusterName, cluster.ID, interval)
 	}
 
 	return nil
@@ -192,7 +193,7 @@ func (ss *ScheduleService) performDataCollection(ctx context.Context, job *Sched
 		return fmt.Errorf("集群状态不在线: %s", cluster.Status)
 	}
 
-	log.Printf("开始收集集群 %s (ID: %d) 的数据", cluster.ClusterName, cluster.ID)
+	logger.Info("开始收集集群 %s (ID: %d) 的数据", cluster.ClusterName, cluster.ID)
 
 	// 调用历史服务触发数据收集
 	// 这样避免了直接依赖collector包，通过服务层来协调
@@ -204,7 +205,7 @@ func (ss *ScheduleService) performDataCollection(ctx context.Context, job *Sched
 			return fmt.Errorf("触发集群 %s 数据收集失败: %v", cluster.ClusterName, err)
 		}
 
-		log.Printf("成功触发集群 %s 的数据收集任务", cluster.ClusterName)
+		logger.Info("成功触发集群 %s 的数据收集任务", cluster.ClusterName)
 		return nil
 	}
 
@@ -221,7 +222,7 @@ func (ss *ScheduleService) triggerSingleClusterDataCollection(ctx context.Contex
 	// 2. 通过事件系统触发
 	// 3. 重构为依赖注入模式
 
-	log.Printf("集群 %s 的数据收集任务已加入队列，将通过MultiClusterResourceCollector执行", cluster.ClusterName)
+	logger.Info("集群 %s 的数据收集任务已加入队列，将通过MultiClusterResourceCollector执行", cluster.ClusterName)
 
 	// 这里返回成功，实际的数据收集通过其他路径完成
 	// 这是一个临时解决方案，避免循环依赖
@@ -320,7 +321,7 @@ func (ss *ScheduleService) RestartJob(clusterID uint) error {
 	ctx := context.Background()
 	ss.startSingleJob(ctx, job)
 
-	log.Printf("集群 %s (ID: %d) 的调度任务已重启", job.ClusterName, clusterID)
+	logger.Info("集群 %s (ID: %d) 的调度任务已重启", job.ClusterName, clusterID)
 	return nil
 }
 
@@ -346,7 +347,7 @@ func (ss *ScheduleService) UpdateSettings(newSettings *GlobalScheduleSettings) e
 	// 更新设置
 	ss.globalSettings = newSettings
 
-	log.Printf("全局调度设置已更新: enabled=%v, default_interval=%v, persistence=%v",
+	logger.Info("全局调度设置已更新: enabled=%v, default_interval=%v, persistence=%v",
 		newSettings.Enabled, newSettings.DefaultInterval, newSettings.EnablePersistence)
 
 	return nil
@@ -389,7 +390,7 @@ func (ss *ScheduleService) startSingleJob(ctx context.Context, job *ScheduleJob)
 	// 启动任务协程
 	go ss.runJobLoop(ctx, job)
 
-	log.Printf("启动集群 %s (ID: %d) 的调度任务，下次执行时间: %v", job.ClusterName, job.ClusterID, job.NextRun)
+	logger.Info("启动集群 %s (ID: %d) 的调度任务，下次执行时间: %v", job.ClusterName, job.ClusterID, job.NextRun)
 }
 
 func (ss *ScheduleService) stopSingleJob(job *ScheduleJob) {
@@ -413,7 +414,7 @@ func (ss *ScheduleService) stopSingleJob(job *ScheduleJob) {
 	job.isRunning = false
 	job.Status = "stopped"
 
-	log.Printf("停止集群 %s (ID: %d) 的调度任务", job.ClusterName, job.ClusterID)
+	logger.Info("停止集群 %s (ID: %d) 的调度任务", job.ClusterName, job.ClusterID)
 }
 
 func (ss *ScheduleService) runJobLoop(ctx context.Context, job *ScheduleJob) {
@@ -438,7 +439,7 @@ func (ss *ScheduleService) executeJob(ctx context.Context, job *ScheduleJob) {
 	job.TotalRuns++
 	job.mutex.Unlock()
 
-	log.Printf("开始执行集群 %s (ID: %d) 的数据收集任务", job.ClusterName, job.ClusterID)
+	logger.Info("开始执行集群 %s (ID: %d) 的数据收集任务", job.ClusterName, job.ClusterID)
 
 	// 创建任务超时上下文
 	taskCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
@@ -454,11 +455,11 @@ func (ss *ScheduleService) executeJob(ctx context.Context, job *ScheduleJob) {
 		job.ErrorCount++
 		job.LastError = err.Error()
 		job.Status = "error"
-		log.Printf("集群 %s (ID: %d) 数据收集失败 (错误次数: %d): %v", job.ClusterName, job.ClusterID, job.ErrorCount, err)
+		logger.Info("集群 %s (ID: %d) 数据收集失败 (错误次数: %d): %v", job.ClusterName, job.ClusterID, job.ErrorCount, err)
 
 		// 错误次数过多时暂停任务
 		if job.ErrorCount >= ss.globalSettings.RetryMaxAttempts {
-			log.Printf("集群 %s (ID: %d) 错误次数过多，暂停调度任务", job.ClusterName, job.ClusterID)
+			logger.Info("集群 %s (ID: %d) 错误次数过多，暂停调度任务", job.ClusterName, job.ClusterID)
 			job.Status = "suspended"
 		}
 	} else {
@@ -466,7 +467,7 @@ func (ss *ScheduleService) executeJob(ctx context.Context, job *ScheduleJob) {
 		job.ErrorCount = 0 // 重置错误计数
 		job.LastError = ""
 		job.Status = "running"
-		log.Printf("集群 %s (ID: %d) 数据收集成功完成 (成功次数: %d)", job.ClusterName, job.ClusterID, job.SuccessfulRuns)
+		logger.Info("集群 %s (ID: %d) 数据收集成功完成 (成功次数: %d)", job.ClusterName, job.ClusterID, job.SuccessfulRuns)
 	}
 }
 
@@ -507,7 +508,7 @@ func (ss *ScheduleService) performHealthCheck() {
 		job.mutex.RUnlock()
 	}
 
-	log.Printf("调度服务健康检查 - 运行中: %d, 错误: %d, 暂停: %d, 总计: %d",
+	logger.Error("调度服务健康检查 - 运行中: %d, 错误: %d, 暂停: %d, 总计: %d",
 		runningJobs, errorJobs, suspendedJobs, len(ss.jobs))
 }
 
@@ -528,21 +529,21 @@ func (ss *ScheduleService) managementLoop(ctx context.Context) {
 }
 
 func (ss *ScheduleService) performMaintenance(ctx context.Context) {
-	log.Println("开始执行调度服务维护任务...")
+	logger.Info("开始执行调度服务维护任务...")
 
 	// 重新加载集群配置
 	if err := ss.reloadClusterJobs(ctx); err != nil {
-		log.Printf("重新加载集群配置失败: %v", err)
+		logger.Error("重新加载集群配置失败: %v", err)
 	}
 
 	// 清理过期数据（如果启用）
 	if ss.globalSettings.EnablePersistence && ss.historyService != nil {
 		if err := ss.historyService.CleanupOldData(ctx, 30); err != nil {
-			log.Printf("清理过期数据失败: %v", err)
+			logger.Error("清理过期数据失败: %v", err)
 		}
 	}
 
-	log.Println("调度服务维护任务完成")
+	logger.Info("调度服务维护任务完成")
 }
 
 func (ss *ScheduleService) reloadClusterJobs(ctx context.Context) error {
@@ -576,7 +577,7 @@ func (ss *ScheduleService) reloadClusterJobs(ctx context.Context) error {
 					existingJob.Interval = newInterval
 					// 重新启动任务
 					ss.startSingleJob(ctx, existingJob)
-					log.Printf("集群 %s (ID: %d) 采集间隔已更新为: %v", cluster.ClusterName, cluster.ID, newInterval)
+					logger.Info("集群 %s (ID: %d) 采集间隔已更新为: %v", cluster.ClusterName, cluster.ID, newInterval)
 				}
 			} else {
 				// 新集群，创建任务
@@ -594,7 +595,7 @@ func (ss *ScheduleService) reloadClusterJobs(ctx context.Context) error {
 
 				ss.jobs[cluster.ID] = job
 				ss.startSingleJob(ctx, job)
-				log.Printf("为新集群 %s (ID: %d) 创建调度任务，间隔: %v", cluster.ClusterName, cluster.ID, interval)
+				logger.Info("为新集群 %s (ID: %d) 创建调度任务，间隔: %v", cluster.ClusterName, cluster.ID, interval)
 			}
 		}
 	}
@@ -604,7 +605,7 @@ func (ss *ScheduleService) reloadClusterJobs(ctx context.Context) error {
 		if !newClusterIDs[clusterID] {
 			ss.stopSingleJob(job)
 			delete(ss.jobs, clusterID)
-			log.Printf("移除集群 %s (ID: %d) 的调度任务", job.ClusterName, clusterID)
+			logger.Info("移除集群 %s (ID: %d) 的调度任务", job.ClusterName, clusterID)
 		}
 	}
 

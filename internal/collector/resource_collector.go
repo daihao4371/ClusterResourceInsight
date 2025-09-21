@@ -3,11 +3,11 @@ package collector
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
 
+	"cluster-resource-insight/internal/logger"
 	"cluster-resource-insight/internal/models"
 	"cluster-resource-insight/internal/service"
 
@@ -99,6 +99,7 @@ type PodSearchResponse struct {
 type MultiClusterResourceCollector struct {
 	clusterService *service.ClusterService
 	historyService *service.HistoryService
+	activityService *service.ActivityService
 	
 	// Pod数据缓存
 	podsCache         []PodResourceInfo
@@ -127,6 +128,7 @@ func NewMultiClusterResourceCollector() *MultiClusterResourceCollector {
 	return &MultiClusterResourceCollector{
 		clusterService:   service.NewClusterService(),
 		historyService:   service.NewHistoryService(),
+		activityService:  service.NewActivityService(),
 		podCacheTTL:      2 * time.Minute,  // Pod数据缓存2分钟
 		analysisCacheTTL: 3 * time.Minute,  // 分析结果缓存3分钟
 	}
@@ -154,10 +156,10 @@ func (mc *MultiClusterResourceCollector) CollectAllClustersDataWithPersistence(c
 	// 首先尝试从缓存获取分析结果（仅在非持久化模式下）
 	if !enablePersistence {
 		if cachedAnalysis, cached := mc.getCachedAnalysis(); cached {
-			log.Printf("使用缓存的分析结果: %d 个问题Pod", len(cachedAnalysis.Top50Problems))
+			logger.Info("使用缓存的分析结果: %d 个问题Pod", len(cachedAnalysis.Top50Problems))
 			return cachedAnalysis, nil
 		}
-		log.Println("分析结果缓存未命中，开始数据收集和分析...")
+		logger.Info("分析结果缓存未命中，开始数据收集和分析...")
 	}
 	
 	// 获取所有集群配置
@@ -196,7 +198,7 @@ func (mc *MultiClusterResourceCollector) CollectAllClustersDataWithPersistence(c
 	activeGoroutines := 0
 	for _, cluster := range clusters {
 		if cluster.Status != "online" {
-			log.Printf("跳过离线集群: %s (状态: %s)", cluster.ClusterName, cluster.Status)
+			logger.Info("跳过离线集群: %s (状态: %s)", cluster.ClusterName, cluster.Status)
 			continue
 		}
 
@@ -209,18 +211,27 @@ func (mc *MultiClusterResourceCollector) CollectAllClustersDataWithPersistence(c
 			clusterCtx, clusterCancel := context.WithTimeout(allClustersCtx, 300*time.Second) // 5分钟超时
 			defer clusterCancel()
 
-			log.Printf("开始收集集群 %s 的数据...", c.ClusterName)
+			logger.Info("开始收集集群 %s 的数据...", c.ClusterName)
 
 			// 为每个集群创建客户端
 			kubeClient, metricsClient, err := mc.clusterService.CreateKubernetesClient(&c)
 			if err != nil {
-				log.Printf("创建集群 %s 的客户端失败: %v", c.ClusterName, err)
+				logger.Error("创建集群 %s 的客户端失败: %v", c.ClusterName, err)
+				// 记录集群连接失败活动
+				if mc.activityService != nil {
+					mc.activityService.RecordClusterConnection(c.ID, c.ClusterName, false, fmt.Sprintf("客户端创建失败: %v", err))
+				}
 				resultChan <- struct {
 					ClusterName string
 					Pods        []PodResourceInfo
 					Success     bool
 				}{ClusterName: c.ClusterName, Success: false}
 				return
+			}
+			
+			// 记录集群连接成功活动
+			if mc.activityService != nil {
+				mc.activityService.RecordClusterConnection(c.ID, c.ClusterName, true, "集群客户端创建成功")
 			}
 
 			// 创建单集群收集器
@@ -232,13 +243,22 @@ func (mc *MultiClusterResourceCollector) CollectAllClustersDataWithPersistence(c
 			// 收集该集群的数据
 			clusterResult, err := singleCollector.collectSingleClusterData(clusterCtx, c.ClusterName)
 			if err != nil {
-				log.Printf("收集集群 %s 数据失败: %v", c.ClusterName, err)
+				logger.Error("收集集群 %s 数据失败: %v", c.ClusterName, err)
+				// 记录数据收集失败活动
+				if mc.activityService != nil {
+					mc.activityService.RecordDataCollection(c.ID, c.ClusterName, 0, false)
+				}
 				resultChan <- struct {
 					ClusterName string
 					Pods        []PodResourceInfo
 					Success     bool
 				}{ClusterName: c.ClusterName, Success: false}
 				return
+			}
+			
+			// 记录数据收集成功活动
+			if mc.activityService != nil {
+				mc.activityService.RecordDataCollection(c.ID, c.ClusterName, len(clusterResult.Top50Problems), true)
 			}
 
 			// 为每个 Pod 添加集群名称标识
@@ -255,14 +275,20 @@ func (mc *MultiClusterResourceCollector) CollectAllClustersDataWithPersistence(c
 					servicePods := convertToServicePods(allClusterPods)
 					// 保存历史数据
 					if saveErr := mc.historyService.SavePodMetrics(c.ID, servicePods); saveErr != nil {
-						log.Printf("保存集群 %s 历史数据失败: %v", c.ClusterName, saveErr)
+						logger.Error("保存集群 %s 历史数据失败: %v", c.ClusterName, saveErr)
 					} else {
-						log.Printf("成功保存集群 %s 的 %d 条Pod监控数据", c.ClusterName, len(allClusterPods))
+						logger.Info("成功保存集群 %s 的 %d 条Pod监控数据", c.ClusterName, len(allClusterPods))
 					}
 				}
 			}
 
-			log.Printf("集群 %s 数据收集完成，共收集 %d 个问题Pod", c.ClusterName, len(clusterResult.Top50Problems))
+			logger.Info("集群 %s 数据收集完成，共收集 %d 个问题Pod", c.ClusterName, len(clusterResult.Top50Problems))
+			
+			// 生成资源使用率告警
+			if mc.activityService != nil {
+				mc.generateResourceAlerts(c.ID, c.ClusterName, clusterResult.Top50Problems)
+			}
+			
 			resultChan <- struct {
 				ClusterName string
 				Pods        []PodResourceInfo
@@ -278,12 +304,12 @@ func (mc *MultiClusterResourceCollector) CollectAllClustersDataWithPersistence(c
 			if result.Success {
 				allPods = append(allPods, result.Pods...)
 				clustersAnalyzed++
-				log.Printf("集群 %s 数据收集成功", result.ClusterName)
+				logger.Info("集群 %s 数据收集成功", result.ClusterName)
 			} else {
-				log.Printf("集群 %s 数据收集失败", result.ClusterName)
+				logger.Error("集群 %s 数据收集失败", result.ClusterName)
 			}
 		case <-allClustersCtx.Done():
-			log.Printf("多集群数据收集超时，已处理 %d/%d 个集群", clustersAnalyzed, len(clusters))
+			logger.Info("多集群数据收集超时，已处理 %d/%d 个集群", clustersAnalyzed, len(clusters))
 			goto analysis
 		}
 	}
@@ -294,7 +320,7 @@ analysis:
 	analysisResult := mc.analyzeMultiClusterData(allPods)
 	analysisResult.ClustersAnalyzed = clustersAnalyzed
 
-	log.Printf("多集群数据收集完成，成功处理 %d/%d 个集群，共收集 %d 个问题Pod", 
+	logger.Info("多集群数据收集完成，成功处理 %d/%d 个集群，共收集 %d 个问题Pod", 
 		clustersAnalyzed, len(clusters), len(allPods))
 
 	// 缓存分析结果（除非是强制持久化模式）
@@ -351,14 +377,14 @@ func (rc *ResourceCollector) collectSingleClusterData(ctx context.Context, clust
 			successCount++
 		case err := <-errorChan:
 			// 记录错误但继续处理其他 namespace
-			log.Printf("错误: %v", err)
+			logger.Error("错误: %v", err)
 		case <-clusterCtx.Done():
-			log.Printf("集群 %s 数据收集超时，已收集 %d/%d 个命名空间", clusterName, successCount, len(namespaces.Items))
+			logger.Info("集群 %s 数据收集超时，已收集 %d/%d 个命名空间", clusterName, successCount, len(namespaces.Items))
 			break
 		}
 	}
 
-	log.Printf("集群 %s 数据收集完成，成功处理 %d/%d 个命名空间，共收集 %d 个Pod", 
+	logger.Info("集群 %s 数据收集完成，成功处理 %d/%d 个命名空间，共收集 %d 个Pod", 
 		clusterName, successCount, len(namespaces.Items), len(allPods))
 
 	// 分析数据并找出问题
@@ -376,7 +402,7 @@ func (rc *ResourceCollector) collectNamespacePodsData(ctx context.Context, names
 		if attempt > 0 {
 			// 指数退避重试
 			waitTime := time.Duration(attempt) * 2 * time.Second
-			log.Printf("命名空间 %s 第%d次重试，等待 %v", namespace, attempt, waitTime)
+			logger.Info("命名空间 %s 第%d次重试，等待 %v", namespace, attempt, waitTime)
 			time.Sleep(waitTime)
 		}
 
@@ -388,7 +414,7 @@ func (rc *ResourceCollector) collectNamespacePodsData(ctx context.Context, names
 		pods, err := rc.kubeClient.CoreV1().Pods(namespace).List(requestCtx, metav1.ListOptions{})
 		if err != nil {
 			lastErr = err
-			log.Printf("获取命名空间 %s Pod列表失败 (第%d次尝试): %v", namespace, attempt+1, err)
+			logger.Error("获取命名空间 %s Pod列表失败 (第%d次尝试): %v", namespace, attempt+1, err)
 			continue
 		}
 
@@ -403,7 +429,7 @@ func (rc *ResourceCollector) collectNamespacePodsData(ctx context.Context, names
 		podMetrics, err = rc.metricsClient.MetricsV1beta1().PodMetricses(namespace).List(metricsCtx, metav1.ListOptions{})
 		if err != nil {
 			// Metrics Server 不可用，只分析配置不使用实际用量
-			log.Printf("警告: 无法获取命名空间 %s 的 metrics 数据 (可能 metrics-server 未安装): %v", namespace, err)
+			logger.Info("警告: 无法获取命名空间 %s 的 metrics 数据 (可能 metrics-server 未安装): %v", namespace, err)
 			metricsMap = make(map[string]*metricsv1beta1.PodMetrics)
 		} else {
 			// 创建 metrics 映射表以便快速查找
@@ -430,7 +456,7 @@ func (rc *ResourceCollector) collectNamespacePodsData(ctx context.Context, names
 			
 			// 如果 Pod 有 metrics 数据但使用量为 0，记录警告
 			if metricsMap[pod.Name] != nil && podInfo.MemoryUsage == 0 && podInfo.CPUUsage == 0 {
-				log.Printf("警告: Pod %s/%s 有 metrics 数据但使用量为0，可能数据收集有问题", pod.Namespace, pod.Name)
+				logger.Info("警告: Pod %s/%s 有 metrics 数据但使用量为0，可能数据收集有问题", pod.Namespace, pod.Name)
 			}
 			
 			podInfos = append(podInfos, podInfo)
@@ -1000,7 +1026,7 @@ func (mc *MultiClusterResourceCollector) SearchPods(ctx context.Context, req Pod
 	allPods, cached := mc.getCachedPods()
 	
 	if !cached {
-		log.Println("Pod缓存未命中，开始收集数据...")
+		logger.Info("Pod缓存未命中，开始收集数据...")
 		
 		// 缓存未命中，收集所有Pod数据
 		clusters, err := mc.clusterService.GetAllClusters()
@@ -1020,7 +1046,7 @@ func (mc *MultiClusterResourceCollector) SearchPods(ctx context.Context, req Pod
 
 			kubeClient, metricsClient, err := mc.clusterService.CreateKubernetesClient(&cluster)
 			if err != nil {
-				log.Printf("创建集群 %s 客户端失败，跳过: %v", cluster.ClusterName, err)
+				logger.Error("创建集群 %s 客户端失败，跳过: %v", cluster.ClusterName, err)
 				continue
 			}
 
@@ -1031,7 +1057,7 @@ func (mc *MultiClusterResourceCollector) SearchPods(ctx context.Context, req Pod
 
 			clusterPods, err := singleCollector.collectAllPodsWithoutFiltering(ctx, cluster.ClusterName)
 			if err != nil {
-				log.Printf("收集集群 %s Pod数据失败，跳过: %v", cluster.ClusterName, err)
+				logger.Error("收集集群 %s Pod数据失败，跳过: %v", cluster.ClusterName, err)
 				continue
 			}
 
@@ -1040,9 +1066,9 @@ func (mc *MultiClusterResourceCollector) SearchPods(ctx context.Context, req Pod
 		
 		// 更新缓存
 		mc.setCachedPods(allPods)
-		log.Printf("Pod数据收集完成，共 %d 条记录已缓存", len(allPods))
+		logger.Info("Pod数据收集完成，共 %d 条记录已缓存", len(allPods))
 	} else {
-		log.Printf("使用缓存的Pod数据，共 %d 条记录", len(allPods))
+		logger.Info("使用缓存的Pod数据，共 %d 条记录", len(allPods))
 	}
 	
 	// 应用筛选条件
@@ -1263,7 +1289,7 @@ func (mc *MultiClusterResourceCollector) setCachedPods(pods []PodResourceInfo) {
 	copy(mc.podsCache, pods)
 	mc.podsCacheExp = time.Now().Add(mc.podCacheTTL)
 	
-	log.Printf("Pod数据缓存已更新，共 %d 条记录，过期时间: %v", len(pods), mc.podsCacheExp)
+	logger.Info("Pod数据缓存已更新，共 %d 条记录，过期时间: %v", len(pods), mc.podsCacheExp)
 }
 
 // getCachedAnalysis 获取缓存的分析结果
@@ -1307,7 +1333,7 @@ func (mc *MultiClusterResourceCollector) setCachedAnalysis(analysis *AnalysisRes
 		
 		mc.analysisCacheExp = time.Now().Add(mc.analysisCacheTTL)
 		
-		log.Printf("分析结果缓存已更新，问题Pod数量: %d，过期时间: %v", 
+		logger.Info("分析结果缓存已更新，问题Pod数量: %d，过期时间: %v", 
 			len(analysis.Top50Problems), mc.analysisCacheExp)
 	}
 }
@@ -1322,5 +1348,72 @@ func (mc *MultiClusterResourceCollector) invalidateCache() {
 	mc.podsCacheExp = time.Time{}
 	mc.analysisCacheExp = time.Time{}
 	
-	log.Println("所有缓存已失效")
+	logger.Info("所有缓存已失效")
+}
+
+// generateResourceAlerts 为问题Pod生成资源使用率告警
+func (mc *MultiClusterResourceCollector) generateResourceAlerts(clusterID uint, clusterName string, problemPods []PodResourceInfo) {
+	if mc.activityService == nil {
+		return
+	}
+	
+	criticalCount := 0
+	warningCount := 0
+	
+	for _, pod := range problemPods {
+		// 分析问题严重程度并生成相应告警
+		isCritical := false
+		alertMessage := ""
+		
+		// 检查是否为严重问题（利用率极低或配置缺失）
+		if contains(pod.Issues, "缺少内存请求配置") || contains(pod.Issues, "缺少CPU请求配置") {
+			isCritical = true
+			alertMessage = fmt.Sprintf("Pod %s/%s 缺少资源配置", pod.Namespace, pod.PodName)
+			criticalCount++
+		} else if (pod.MemoryReqPct > 0 && pod.MemoryReqPct < 10) || (pod.CPUReqPct > 0 && pod.CPUReqPct < 5) {
+			isCritical = true
+			alertMessage = fmt.Sprintf("Pod %s/%s 资源利用率极低：内存 %.1f%%, CPU %.1f%%", pod.Namespace, pod.PodName, pod.MemoryReqPct, pod.CPUReqPct)
+			criticalCount++
+		} else {
+			alertMessage = fmt.Sprintf("Pod %s/%s 资源配置不合理", pod.Namespace, pod.PodName)
+			warningCount++
+		}
+		
+		// 记录资源告警活动
+		alertType := "warning"
+		if isCritical {
+			alertType = "critical"
+		}
+		mc.activityService.RecordResourceAlert(clusterID, clusterName, pod.PodName, alertType, alertMessage)
+		
+		// 为严重问题创建系统告警记录
+		if isCritical {
+			level := "error"
+			if criticalCount <= 5 { // 只为前5个最严重的问题创建告警记录，避免告警过多
+				title := "严重资源配置问题"
+				mc.activityService.CreateAlert(clusterID, level, title, alertMessage, "active")
+			}
+		}
+	}
+	
+	// 创建集群级别的汇总告警
+	if criticalCount > 0 || warningCount > 0 {
+		title := "集群资源配置问题汇总"
+		message := fmt.Sprintf("发现 %d 个严重问题，%d 个一般问题", criticalCount, warningCount)
+		level := "warning"
+		if criticalCount > 5 {
+			level = "error"
+		}
+		mc.activityService.CreateAlert(clusterID, level, title, message, "active")
+	}
+}
+
+// contains 检查字符串切片是否包含特定字符串
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
