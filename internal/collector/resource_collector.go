@@ -99,6 +99,7 @@ type PodSearchResponse struct {
 type MultiClusterResourceCollector struct {
 	clusterService *service.ClusterService
 	historyService *service.HistoryService
+	activityService *service.ActivityService
 	
 	// Pod数据缓存
 	podsCache         []PodResourceInfo
@@ -127,6 +128,7 @@ func NewMultiClusterResourceCollector() *MultiClusterResourceCollector {
 	return &MultiClusterResourceCollector{
 		clusterService:   service.NewClusterService(),
 		historyService:   service.NewHistoryService(),
+		activityService:  service.NewActivityService(),
 		podCacheTTL:      2 * time.Minute,  // Pod数据缓存2分钟
 		analysisCacheTTL: 3 * time.Minute,  // 分析结果缓存3分钟
 	}
@@ -215,12 +217,21 @@ func (mc *MultiClusterResourceCollector) CollectAllClustersDataWithPersistence(c
 			kubeClient, metricsClient, err := mc.clusterService.CreateKubernetesClient(&c)
 			if err != nil {
 				logger.Error("创建集群 %s 的客户端失败: %v", c.ClusterName, err)
+				// 记录集群连接失败活动
+				if mc.activityService != nil {
+					mc.activityService.RecordClusterConnection(c.ID, c.ClusterName, false, fmt.Sprintf("客户端创建失败: %v", err))
+				}
 				resultChan <- struct {
 					ClusterName string
 					Pods        []PodResourceInfo
 					Success     bool
 				}{ClusterName: c.ClusterName, Success: false}
 				return
+			}
+			
+			// 记录集群连接成功活动
+			if mc.activityService != nil {
+				mc.activityService.RecordClusterConnection(c.ID, c.ClusterName, true, "集群客户端创建成功")
 			}
 
 			// 创建单集群收集器
@@ -233,12 +244,21 @@ func (mc *MultiClusterResourceCollector) CollectAllClustersDataWithPersistence(c
 			clusterResult, err := singleCollector.collectSingleClusterData(clusterCtx, c.ClusterName)
 			if err != nil {
 				logger.Error("收集集群 %s 数据失败: %v", c.ClusterName, err)
+				// 记录数据收集失败活动
+				if mc.activityService != nil {
+					mc.activityService.RecordDataCollection(c.ID, c.ClusterName, 0, false)
+				}
 				resultChan <- struct {
 					ClusterName string
 					Pods        []PodResourceInfo
 					Success     bool
 				}{ClusterName: c.ClusterName, Success: false}
 				return
+			}
+			
+			// 记录数据收集成功活动
+			if mc.activityService != nil {
+				mc.activityService.RecordDataCollection(c.ID, c.ClusterName, len(clusterResult.Top50Problems), true)
 			}
 
 			// 为每个 Pod 添加集群名称标识
@@ -263,6 +283,12 @@ func (mc *MultiClusterResourceCollector) CollectAllClustersDataWithPersistence(c
 			}
 
 			logger.Info("集群 %s 数据收集完成，共收集 %d 个问题Pod", c.ClusterName, len(clusterResult.Top50Problems))
+			
+			// 生成资源使用率告警
+			if mc.activityService != nil {
+				mc.generateResourceAlerts(c.ID, c.ClusterName, clusterResult.Top50Problems)
+			}
+			
 			resultChan <- struct {
 				ClusterName string
 				Pods        []PodResourceInfo
@@ -1323,4 +1349,71 @@ func (mc *MultiClusterResourceCollector) invalidateCache() {
 	mc.analysisCacheExp = time.Time{}
 	
 	logger.Info("所有缓存已失效")
+}
+
+// generateResourceAlerts 为问题Pod生成资源使用率告警
+func (mc *MultiClusterResourceCollector) generateResourceAlerts(clusterID uint, clusterName string, problemPods []PodResourceInfo) {
+	if mc.activityService == nil {
+		return
+	}
+	
+	criticalCount := 0
+	warningCount := 0
+	
+	for _, pod := range problemPods {
+		// 分析问题严重程度并生成相应告警
+		isCritical := false
+		alertMessage := ""
+		
+		// 检查是否为严重问题（利用率极低或配置缺失）
+		if contains(pod.Issues, "缺少内存请求配置") || contains(pod.Issues, "缺少CPU请求配置") {
+			isCritical = true
+			alertMessage = fmt.Sprintf("Pod %s/%s 缺少资源配置", pod.Namespace, pod.PodName)
+			criticalCount++
+		} else if (pod.MemoryReqPct > 0 && pod.MemoryReqPct < 10) || (pod.CPUReqPct > 0 && pod.CPUReqPct < 5) {
+			isCritical = true
+			alertMessage = fmt.Sprintf("Pod %s/%s 资源利用率极低：内存 %.1f%%, CPU %.1f%%", pod.Namespace, pod.PodName, pod.MemoryReqPct, pod.CPUReqPct)
+			criticalCount++
+		} else {
+			alertMessage = fmt.Sprintf("Pod %s/%s 资源配置不合理", pod.Namespace, pod.PodName)
+			warningCount++
+		}
+		
+		// 记录资源告警活动
+		alertType := "warning"
+		if isCritical {
+			alertType = "critical"
+		}
+		mc.activityService.RecordResourceAlert(clusterID, clusterName, pod.PodName, alertType, alertMessage)
+		
+		// 为严重问题创建系统告警记录
+		if isCritical {
+			level := "error"
+			if criticalCount <= 5 { // 只为前5个最严重的问题创建告警记录，避免告警过多
+				title := "严重资源配置问题"
+				mc.activityService.CreateAlert(clusterID, level, title, alertMessage, "active")
+			}
+		}
+	}
+	
+	// 创建集群级别的汇总告警
+	if criticalCount > 0 || warningCount > 0 {
+		title := "集群资源配置问题汇总"
+		message := fmt.Sprintf("发现 %d 个严重问题，%d 个一般问题", criticalCount, warningCount)
+		level := "warning"
+		if criticalCount > 5 {
+			level = "error"
+		}
+		mc.activityService.CreateAlert(clusterID, level, title, message, "active")
+	}
+}
+
+// contains 检查字符串切片是否包含特定字符串
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }

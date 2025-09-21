@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { SystemStats, Notification, TrendData } from '../types'
+import type { SystemStats, Notification, TrendData, ActivityItem, Alert } from '../types'
 import { api } from '../utils/api'
 
 export const useSystemStore = defineStore('system', () => {
@@ -8,8 +8,12 @@ export const useSystemStore = defineStore('system', () => {
   const stats = ref<SystemStats | null>(null)
   const trendData = ref<TrendData[]>([])
   const notifications = ref<Notification[]>([])
+  const realtimeActivities = ref<ActivityItem[]>([])
+  const systemAlerts = ref<Alert[]>([])
   const loading = ref(false)
   const trendLoading = ref(false)
+  const activitiesLoading = ref(false)
+  const alertsLoading = ref(false)
   const error = ref<string | null>(null)
 
   // 获取系统统计信息
@@ -121,20 +125,98 @@ export const useSystemStore = defineStore('system', () => {
     notifications.value = []
   }
 
+  // 获取实时活动数据
+  const fetchRealtimeActivities = async (limit: number = 10) => {
+    activitiesLoading.value = true
+    
+    try {
+      const response = await api.get(`/activities/recent?limit=${limit}`)
+      
+      if (response.data?.code === 0 && response.data?.data?.data) {
+        realtimeActivities.value = response.data.data.data
+      } else {
+        console.warn('获取实时活动数据失败，使用默认数据')
+        realtimeActivities.value = []
+      }
+    } catch (err: any) {
+      console.error('获取实时活动数据失败:', err)
+      // 发生错误时清空数据
+      realtimeActivities.value = []
+    } finally {
+      activitiesLoading.value = false
+    }
+  }
+
+  // 获取系统告警数据
+  const fetchSystemAlerts = async (limit: number = 10) => {
+    alertsLoading.value = true
+    
+    try {
+      const response = await api.get(`/alerts/recent?limit=${limit}`)
+      
+      if (response.data?.code === 0 && response.data?.data?.data) {
+        systemAlerts.value = response.data.data.data
+      } else {
+        console.warn('获取系统告警数据失败，使用默认数据')
+        systemAlerts.value = []
+      }
+    } catch (err: any) {
+      console.error('获取系统告警数据失败:', err)
+      // 发生错误时清空数据
+      systemAlerts.value = []
+    } finally {
+      alertsLoading.value = false
+    }
+  }
+
+  // 初始化示例数据（用于演示）
+  const initializeSampleData = async () => {
+    try {
+      await api.post('/activities/sample')
+      // 重新获取数据
+      await Promise.all([
+        fetchRealtimeActivities(),
+        fetchSystemAlerts()
+      ])
+      return true
+    } catch (err: any) {
+      console.error('初始化示例数据失败:', err)
+      return false
+    }
+  }
+
+  // 刷新所有数据
+  const refreshAllData = async () => {
+    await Promise.all([
+      fetchStats(),
+      fetchTrendData(24),
+      fetchRealtimeActivities(),
+      fetchSystemAlerts()
+    ])
+  }
+
   return {
     // 状态
     stats,
     trendData,
     notifications,
+    realtimeActivities,
+    systemAlerts,
     loading,
     trendLoading,
+    activitiesLoading,
+    alertsLoading,
     error,
     
     // 方法
     fetchStats,
     fetchTrendData,
+    fetchRealtimeActivities,
+    fetchSystemAlerts,
     addNotification,
     removeNotification,
-    clearNotifications
+    clearNotifications,
+    initializeSampleData,
+    refreshAllData
   }
 })

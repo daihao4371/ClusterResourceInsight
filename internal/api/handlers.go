@@ -72,6 +72,18 @@ func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollec
 		scheduleGroup.PUT("/settings", updateScheduleSettings(scheduleService))             // 更新全局调度配置
 	}
 
+	// 新增活动和告警接口
+	activityService := service.NewActivityService()
+	activitiesGroup := r.Group("/activities")
+	{
+		activitiesGroup.GET("/recent", getRecentActivities(activityService))        // 获取最近活动
+	}
+
+	alertsGroup := r.Group("/alerts")
+	{
+		alertsGroup.GET("/recent", getRecentAlerts(activityService))                // 获取最近告警
+	}
+
 	// 集群管理接口
 	clusterService := service.NewClusterService()
 
@@ -874,4 +886,52 @@ func getSystemTrendData(historyService *service.HistoryService) gin.HandlerFunc 
 		}, c)
 	}
 }
+
+// 活动和告警相关handlers
+func getRecentActivities(activityService *service.ActivityService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		limitStr := c.DefaultQuery("limit", "10")
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil {
+			limit = 10
+		}
+
+		activities, err := activityService.GetRecentActivities(limit)
+		if err != nil {
+			logger.Error("获取最近活动失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+
+		response.OkWithData(gin.H{
+			"data":  activities,
+			"count": len(activities),
+			"limit": limit,
+		}, c)
+	}
+}
+
+func getRecentAlerts(activityService *service.ActivityService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		limitStr := c.DefaultQuery("limit", "10")
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil {
+			limit = 10
+		}
+
+		alerts, err := activityService.GetRecentAlerts(limit)
+		if err != nil {
+			logger.Error("获取最近告警失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+
+		response.OkWithData(gin.H{
+			"data":  alerts,
+			"count": len(alerts),
+			"limit": limit,
+		}, c)
+	}
+}
+
 

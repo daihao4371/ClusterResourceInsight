@@ -108,7 +108,10 @@
             <span class="text-sm text-gray-400">实时更新</span>
           </div>
         </div>
-        <RealtimeActivity :activities="realtimeActivities" />
+        <RealtimeActivity 
+          :activities="systemStore.realtimeActivities" 
+          :loading="systemStore.activitiesLoading"
+        />
       </div>
       
       <!-- 系统告警 -->
@@ -119,7 +122,10 @@
             查看全部
           </router-link>
         </div>
-        <SystemAlerts :alerts="systemAlerts" />
+        <SystemAlerts 
+          :alerts="systemStore.systemAlerts" 
+          :loading="systemStore.alertsLoading"
+        />
       </div>
     </div>
 
@@ -237,23 +243,13 @@ const onTimeRangeChange = () => {
   systemStore.fetchTrendData(hours)
 }
 
-const realtimeActivities = ref([
-  { type: 'success', message: '集群 prod-cluster-01 连接正常', time: '刚刚' },
-  { type: 'warning', message: 'Pod nginx-deployment-xxx 内存使用率过高', time: '2分钟前' },
-  { type: 'info', message: '开始收集集群 dev-cluster-02 数据', time: '5分钟前' },
-  { type: 'error', message: '集群 test-cluster-03 连接失败', time: '8分钟前' }
-])
-
-const systemAlerts = ref([
-  { level: 'high', title: '集群连接异常', description: 'test-cluster-03 无法访问', time: '10分钟前' },
-  { level: 'medium', title: '资源使用率过高', description: 'prod-cluster-01 CPU使用率超过80%', time: '15分钟前' },
-  { level: 'low', title: '数据收集完成', description: '已完成所有集群的数据收集', time: '20分钟前' }
-])
-
 onMounted(() => {
   // 初始化数据
   systemStore.fetchStats()
   // 初始化趋势数据 - 默认24小时
   systemStore.fetchTrendData(24)
+  // 初始化实时活动和告警数据
+  systemStore.fetchRealtimeActivities()
+  systemStore.fetchSystemAlerts()
 })
 </script>

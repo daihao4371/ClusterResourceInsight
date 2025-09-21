@@ -38,6 +38,12 @@ const router = createRouter({
       name: 'Schedule',
       component: () => import('../views/Schedule.vue'),
       meta: { title: '调度管理' }
+    },
+    {
+      path: '/alerts',
+      name: 'Alerts',
+      component: () => import('../views/Alerts.vue'),
+      meta: { title: '系统告警' }
     }
   ]
 })

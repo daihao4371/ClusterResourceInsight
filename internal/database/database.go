@@ -90,6 +90,7 @@ func MigrateDatabase() error {
 		&models.SystemSettings{},
 		&models.AlertRule{},
 		&models.AlertHistory{},
+		&models.SystemActivity{},
 	)
 	if err != nil {
 		return fmt.Errorf("数据库迁移失败: %v", err)
