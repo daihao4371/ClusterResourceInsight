@@ -7,13 +7,13 @@ import (
 	"net/http"
 	"strings"
 
-	"cluster-resource-insight/internal/api"
 	"cluster-resource-insight/internal/collector"
 	"cluster-resource-insight/internal/config"
 	"cluster-resource-insight/internal/database"
 	"cluster-resource-insight/internal/logger"
 	"cluster-resource-insight/internal/models"
 	"cluster-resource-insight/internal/response"
+	"cluster-resource-insight/internal/router"
 
 	"github.com/gin-gonic/gin"
 )
@@ -111,11 +111,11 @@ func main() {
 
 	// API 路由 - 先设置API路由，避免被静态文件路由覆盖
 	apiGroup := r.Group("/api")
-	api.SetupRoutes(apiGroup, resourceCollector)
+	router.SetupRoutes(apiGroup, resourceCollector)
 
 	// 添加v1兼容路由
 	v1ApiGroup := r.Group("/api/v1")
-	api.SetupRoutes(v1ApiGroup, resourceCollector)
+	router.SetupRoutes(v1ApiGroup, resourceCollector)
 
 	// 静态文件服务配置
 	// 首先检查是否存在构建后的dist目录

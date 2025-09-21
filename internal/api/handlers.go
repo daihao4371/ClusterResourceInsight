@@ -15,100 +15,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollector) {
-	// 原有的分析接口
-	r.GET("/analysis", getResourceAnalysis(resourceCollector))
-	r.GET("/pods", getPodsData(resourceCollector))
-	r.GET("/health", healthCheck)
-
-	// 新增系统统计接口
-	r.GET("/stats", getSystemStats(resourceCollector))
-
-	// 新增的资源统计接口
-	multiCollector := collector.NewMultiClusterResourceCollector()
-	statisticsGroup := r.Group("/statistics")
-	{
-		statisticsGroup.GET("/top-memory-request", getTopMemoryRequestPods(multiCollector))
-		statisticsGroup.GET("/top-cpu-request", getTopCPURequestPods(multiCollector))
-		statisticsGroup.GET("/namespace-summary", getNamespacesSummary(multiCollector))
-	}
-
-	// 新增的命名空间相关接口
-	namespacesGroup := r.Group("/namespaces")
-	{
-		namespacesGroup.GET("", getAllNamespaces(multiCollector))
-		namespacesGroup.GET("/:namespace/pods", getNamespacePods(multiCollector))
-		namespacesGroup.GET("/:namespace/tree-data", getNamespaceTreeData(multiCollector))
-	}
-
-	// Pod搜索与分页接口
-	podsGroup := r.Group("/pods")
-	{
-		podsGroup.GET("/search", searchPods(multiCollector))
-		podsGroup.GET("/list", listPods(multiCollector))
-		podsGroup.GET("/problems", getProblemsWithPagination(multiCollector)) // 新增问题Pod分页接口
-	}
-
-	// 新增的历史数据接口
-	historyService := service.NewHistoryService()
-	historyGroup := r.Group("/history")
-	{
-		historyGroup.GET("/query", queryHistoryData(historyService))
-		historyGroup.GET("/trends", getTrendData(historyService))
-		historyGroup.GET("/system-trends", getSystemTrendData(historyService)) // 新增系统级趋势数据接口
-		historyGroup.GET("/statistics", getHistoryStatistics(historyService))
-		historyGroup.POST("/collect", triggerDataCollection(multiCollector))
-		historyGroup.DELETE("/cleanup", cleanupOldData(historyService))
-	}
-
-	// 新增的调度管理接口
-	scheduleService := service.NewScheduleService()
-	scheduleGroup := r.Group("/schedule")
-	{
-		scheduleGroup.GET("/status", getScheduleStatus(scheduleService))                    // 获取调度服务状态
-		scheduleGroup.POST("/start", startScheduleService(scheduleService))                 // 启动调度服务
-		scheduleGroup.POST("/stop", stopScheduleService(scheduleService))                   // 停止调度服务
-		scheduleGroup.GET("/jobs", getScheduleJobs(scheduleService))                        // 获取所有调度任务状态
-		scheduleGroup.POST("/jobs/:cluster_id/restart", restartClusterJob(scheduleService)) // 重启指定集群任务
-		scheduleGroup.PUT("/settings", updateScheduleSettings(scheduleService))             // 更新全局调度配置
-	}
-
-	// 新增活动和告警接口
-	activityService := service.NewActivityService()
-	activitiesGroup := r.Group("/activities")
-	{
-		activitiesGroup.GET("/recent", getRecentActivities(activityService)) // 获取最近活动
-		activitiesGroup.DELETE("/cleanup", cleanupOldActivitiesAndAlerts(activityService)) // 清理旧数据
-	}
-
-	alertsGroup := r.Group("/alerts")
-	{
-		alertsGroup.GET("/recent", getRecentAlerts(activityService))       // 获取最近告警
-		alertsGroup.PUT("/:id/status", updateAlertStatus(activityService)) // 更新告警状态
-		alertsGroup.PUT("/:id/resolve", resolveAlert(activityService))     // 解决告警
-		alertsGroup.PUT("/:id/dismiss", dismissAlert(activityService))     // 忽略告警
-		alertsGroup.GET("/:id", getAlertDetails(activityService))          // 获取告警详情
-	}
-
-	// 集群管理接口
-	clusterService := service.NewClusterService()
-
-	// 集群管理路由组
-	clusterGroup := r.Group("/clusters")
-	{
-		clusterGroup.POST("", createCluster(clusterService))                   // 创建集群
-		clusterGroup.GET("", getAllClusters(clusterService))                   // 获取所有集群
-		clusterGroup.GET("/:id", getClusterByID(clusterService))               // 根据ID获取集群
-		clusterGroup.PUT("/:id", updateCluster(clusterService))                // 更新集群配置
-		clusterGroup.DELETE("/:id", deleteCluster(clusterService))             // 删除集群
-		clusterGroup.POST("/:id/test", testClusterConnection(clusterService))  // 测试集群连接
-		clusterGroup.POST("/test", testClusterByConfig(clusterService))        // 测试集群配置（创建前验证）
-		clusterGroup.POST("/batch-test", batchTestAllClusters(clusterService)) // 批量测试所有集群
-	}
-}
+// SetupRoutes 已移动到 internal/router 包中
+// 这个文件现在只包含处理器函数
 
 // 创建集群
-func createCluster(clusterService *service.ClusterService) gin.HandlerFunc {
+func CreateCluster(clusterService *service.ClusterService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req service.CreateClusterRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -128,7 +39,7 @@ func createCluster(clusterService *service.ClusterService) gin.HandlerFunc {
 }
 
 // 获取所有集群
-func getAllClusters(clusterService *service.ClusterService) gin.HandlerFunc {
+func GetAllClusters(clusterService *service.ClusterService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		clusters, err := clusterService.GetAllClusters()
 		if err != nil {
@@ -144,8 +55,8 @@ func getAllClusters(clusterService *service.ClusterService) gin.HandlerFunc {
 	}
 }
 
-// 根据ID获取集群
-func getClusterByID(clusterService *service.ClusterService) gin.HandlerFunc {
+// GetClusterByID 根据ID获取集群
+func GetClusterByID(clusterService *service.ClusterService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idStr := c.Param("id")
 		id, err := strconv.ParseUint(idStr, 10, 32)
@@ -167,7 +78,7 @@ func getClusterByID(clusterService *service.ClusterService) gin.HandlerFunc {
 }
 
 // 更新集群配置
-func updateCluster(clusterService *service.ClusterService) gin.HandlerFunc {
+func UpdateCluster(clusterService *service.ClusterService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idStr := c.Param("id")
 		id, err := strconv.ParseUint(idStr, 10, 32)
@@ -194,7 +105,7 @@ func updateCluster(clusterService *service.ClusterService) gin.HandlerFunc {
 }
 
 // 删除集群
-func deleteCluster(clusterService *service.ClusterService) gin.HandlerFunc {
+func DeleteCluster(clusterService *service.ClusterService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idStr := c.Param("id")
 		id, err := strconv.ParseUint(idStr, 10, 32)
@@ -215,7 +126,7 @@ func deleteCluster(clusterService *service.ClusterService) gin.HandlerFunc {
 }
 
 // 测试集群连接
-func testClusterConnection(clusterService *service.ClusterService) gin.HandlerFunc {
+func TestClusterConnection(clusterService *service.ClusterService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idStr := c.Param("id")
 		id, err := strconv.ParseUint(idStr, 10, 32)
@@ -238,7 +149,7 @@ func testClusterConnection(clusterService *service.ClusterService) gin.HandlerFu
 }
 
 // 测试集群配置（创建前验证）
-func testClusterByConfig(clusterService *service.ClusterService) gin.HandlerFunc {
+func TestClusterByConfig(clusterService *service.ClusterService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req service.CreateClusterRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -260,7 +171,7 @@ func testClusterByConfig(clusterService *service.ClusterService) gin.HandlerFunc
 }
 
 // 批量测试所有集群
-func batchTestAllClusters(clusterService *service.ClusterService) gin.HandlerFunc {
+func BatchTestAllClusters(clusterService *service.ClusterService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		results, err := clusterService.BatchTestAllClusters()
 		if err != nil {
@@ -276,7 +187,7 @@ func batchTestAllClusters(clusterService *service.ClusterService) gin.HandlerFun
 	}
 }
 
-func getResourceAnalysis(resourceCollector *collector.ResourceCollector) gin.HandlerFunc {
+func GetResourceAnalysis(resourceCollector *collector.ResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger.Info("Starting resource analysis...")
 
@@ -332,7 +243,7 @@ func getResourceAnalysis(resourceCollector *collector.ResourceCollector) gin.Han
 	}
 }
 
-func getPodsData(resourceCollector *collector.ResourceCollector) gin.HandlerFunc {
+func GetPodsData(resourceCollector *collector.ResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 获取查询参数
 		limitStr := c.DefaultQuery("limit", "50")
@@ -371,7 +282,7 @@ func getPodsData(resourceCollector *collector.ResourceCollector) gin.HandlerFunc
 	}
 }
 
-func healthCheck(c *gin.Context) {
+func HealthCheck(c *gin.Context) {
 	response.OkWithData(gin.H{
 		"status":  "healthy",
 		"service": "cluster-resource-insight",
@@ -379,7 +290,7 @@ func healthCheck(c *gin.Context) {
 }
 
 // 系统统计接口 - 提供Dashboard页面所需的统计数据
-func getSystemStats(resourceCollector *collector.ResourceCollector) gin.HandlerFunc {
+func GetSystemStats(resourceCollector *collector.ResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger.Info("获取系统统计数据...")
 
@@ -421,7 +332,7 @@ func getSystemStats(resourceCollector *collector.ResourceCollector) gin.HandlerF
 }
 
 // 资源统计相关handlers
-func getTopMemoryRequestPods(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
+func GetTopMemoryRequestPods(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		limitStr := c.DefaultQuery("limit", "50")
 		limit, err := strconv.Atoi(limitStr)
@@ -444,7 +355,7 @@ func getTopMemoryRequestPods(multiCollector *collector.MultiClusterResourceColle
 	}
 }
 
-func getTopCPURequestPods(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
+func GetTopCPURequestPods(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		limitStr := c.DefaultQuery("limit", "50")
 		limit, err := strconv.Atoi(limitStr)
@@ -467,7 +378,7 @@ func getTopCPURequestPods(multiCollector *collector.MultiClusterResourceCollecto
 	}
 }
 
-func getNamespacesSummary(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
+func GetNamespacesSummary(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		summaries, err := multiCollector.GetNamespacesSummary(c.Request.Context())
 		if err != nil {
@@ -484,7 +395,7 @@ func getNamespacesSummary(multiCollector *collector.MultiClusterResourceCollecto
 }
 
 // 命名空间相关handlers
-func getAllNamespaces(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
+func GetAllNamespaces(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		summaries, err := multiCollector.GetNamespacesSummary(c.Request.Context())
 		if err != nil {
@@ -511,7 +422,7 @@ func getAllNamespaces(multiCollector *collector.MultiClusterResourceCollector) g
 	}
 }
 
-func getNamespacePods(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
+func GetNamespacePods(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		namespace := c.Param("namespace")
 		if namespace == "" {
@@ -534,7 +445,7 @@ func getNamespacePods(multiCollector *collector.MultiClusterResourceCollector) g
 	}
 }
 
-func getNamespaceTreeData(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
+func GetNamespaceTreeData(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		namespace := c.Param("namespace")
 		if namespace == "" {
@@ -556,7 +467,7 @@ func getNamespaceTreeData(multiCollector *collector.MultiClusterResourceCollecto
 }
 
 // Pod搜索与分页handlers
-func searchPods(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
+func SearchPods(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req collector.PodSearchRequest
 		if err := c.ShouldBindQuery(&req); err != nil {
@@ -583,7 +494,7 @@ func searchPods(multiCollector *collector.MultiClusterResourceCollector) gin.Han
 	}
 }
 
-func listPods(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
+func ListPods(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 使用统一的分页处理器解析分页参数
 		paginationHandler := utils.NewHttpPaginationHandler()
@@ -606,7 +517,7 @@ func listPods(multiCollector *collector.MultiClusterResourceCollector) gin.Handl
 }
 
 // 历史数据相关handlers
-func queryHistoryData(historyService *service.HistoryService) gin.HandlerFunc {
+func QueryHistoryData(historyService *service.HistoryService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 使用统一的分页处理器解析分页参数
 		paginationHandler := utils.NewHttpPaginationHandler()
@@ -633,7 +544,7 @@ func queryHistoryData(historyService *service.HistoryService) gin.HandlerFunc {
 	}
 }
 
-func getTrendData(historyService *service.HistoryService) gin.HandlerFunc {
+func GetTrendData(historyService *service.HistoryService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		clusterIDStr := c.Query("cluster_id")
 		namespace := c.Query("namespace")
@@ -673,7 +584,7 @@ func getTrendData(historyService *service.HistoryService) gin.HandlerFunc {
 	}
 }
 
-func getHistoryStatistics(historyService *service.HistoryService) gin.HandlerFunc {
+func GetHistoryStatistics(historyService *service.HistoryService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		stats, err := historyService.GetStatistics()
 		if err != nil {
@@ -688,7 +599,7 @@ func getHistoryStatistics(historyService *service.HistoryService) gin.HandlerFun
 	}
 }
 
-func triggerDataCollection(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
+func TriggerDataCollection(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		persistenceStr := c.DefaultQuery("persistence", "true")
 		enablePersistence := persistenceStr == "true"
@@ -704,7 +615,7 @@ func triggerDataCollection(multiCollector *collector.MultiClusterResourceCollect
 	}
 }
 
-func cleanupOldData(historyService *service.HistoryService) gin.HandlerFunc {
+func CleanupOldData(historyService *service.HistoryService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		retentionDaysStr := c.DefaultQuery("retention_days", "30")
 		retentionDays, err := strconv.Atoi(retentionDaysStr)
@@ -727,7 +638,7 @@ func cleanupOldData(historyService *service.HistoryService) gin.HandlerFunc {
 }
 
 // 调度服务管理handlers
-func getScheduleStatus(scheduleService *service.ScheduleService) gin.HandlerFunc {
+func GetScheduleStatus(scheduleService *service.ScheduleService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		status := scheduleService.GetStatus()
 		response.OkWithData(gin.H{
@@ -736,7 +647,7 @@ func getScheduleStatus(scheduleService *service.ScheduleService) gin.HandlerFunc
 	}
 }
 
-func startScheduleService(scheduleService *service.ScheduleService) gin.HandlerFunc {
+func StartScheduleService(scheduleService *service.ScheduleService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		err := scheduleService.Start(c.Request.Context())
 		if err != nil {
@@ -749,7 +660,7 @@ func startScheduleService(scheduleService *service.ScheduleService) gin.HandlerF
 	}
 }
 
-func stopScheduleService(scheduleService *service.ScheduleService) gin.HandlerFunc {
+func StopScheduleService(scheduleService *service.ScheduleService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		err := scheduleService.Stop()
 		if err != nil {
@@ -762,7 +673,7 @@ func stopScheduleService(scheduleService *service.ScheduleService) gin.HandlerFu
 	}
 }
 
-func getScheduleJobs(scheduleService *service.ScheduleService) gin.HandlerFunc {
+func GetScheduleJobs(scheduleService *service.ScheduleService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		jobs := scheduleService.GetAllJobs()
 		response.OkWithData(gin.H{
@@ -772,7 +683,7 @@ func getScheduleJobs(scheduleService *service.ScheduleService) gin.HandlerFunc {
 	}
 }
 
-func restartClusterJob(scheduleService *service.ScheduleService) gin.HandlerFunc {
+func RestartClusterJob(scheduleService *service.ScheduleService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		clusterIDStr := c.Param("cluster_id")
 		clusterID, err := strconv.ParseUint(clusterIDStr, 10, 32)
@@ -792,7 +703,7 @@ func restartClusterJob(scheduleService *service.ScheduleService) gin.HandlerFunc
 	}
 }
 
-func updateScheduleSettings(scheduleService *service.ScheduleService) gin.HandlerFunc {
+func UpdateScheduleSettings(scheduleService *service.ScheduleService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var settings service.GlobalScheduleSettings
 		if err := c.ShouldBindJSON(&settings); err != nil {
@@ -812,7 +723,7 @@ func updateScheduleSettings(scheduleService *service.ScheduleService) gin.Handle
 }
 
 // 问题Pod分页接口
-func getProblemsWithPagination(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
+func GetProblemsWithPagination(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 使用统一的分页处理器解析分页参数
 		paginationHandler := utils.NewHttpPaginationHandler()
@@ -861,7 +772,7 @@ func getProblemsWithPagination(multiCollector *collector.MultiClusterResourceCol
 }
 
 // getSystemTrendData 获取系统级趋势数据 - 为Dashboard提供聚合的趋势图表数据
-func getSystemTrendData(historyService *service.HistoryService) gin.HandlerFunc {
+func GetSystemTrendData(historyService *service.HistoryService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		hoursStr := c.DefaultQuery("hours", "24")
 
@@ -893,7 +804,7 @@ func getSystemTrendData(historyService *service.HistoryService) gin.HandlerFunc 
 }
 
 // 活动和告警相关handlers
-func getRecentActivities(activityService *service.ActivityService) gin.HandlerFunc {
+func GetRecentActivities(activityService *service.ActivityService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		limitStr := c.DefaultQuery("limit", "10")
 		limit, err := strconv.Atoi(limitStr)
@@ -916,7 +827,7 @@ func getRecentActivities(activityService *service.ActivityService) gin.HandlerFu
 	}
 }
 
-func getRecentAlerts(activityService *service.ActivityService) gin.HandlerFunc {
+func GetRecentAlerts(activityService *service.ActivityService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		limitStr := c.DefaultQuery("limit", "10")
 		limit, err := strconv.Atoi(limitStr)
@@ -940,7 +851,7 @@ func getRecentAlerts(activityService *service.ActivityService) gin.HandlerFunc {
 }
 
 // updateAlertStatus 更新告警状态
-func updateAlertStatus(activityService *service.ActivityService) gin.HandlerFunc {
+func UpdateAlertStatus(activityService *service.ActivityService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 获取告警ID
 		alertIDStr := c.Param("id")
@@ -973,7 +884,7 @@ func updateAlertStatus(activityService *service.ActivityService) gin.HandlerFunc
 }
 
 // resolveAlert 解决告警
-func resolveAlert(activityService *service.ActivityService) gin.HandlerFunc {
+func ResolveAlert(activityService *service.ActivityService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 获取告警ID
 		alertIDStr := c.Param("id")
@@ -996,7 +907,7 @@ func resolveAlert(activityService *service.ActivityService) gin.HandlerFunc {
 }
 
 // dismissAlert 忽略告警
-func dismissAlert(activityService *service.ActivityService) gin.HandlerFunc {
+func DismissAlert(activityService *service.ActivityService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 获取告警ID
 		alertIDStr := c.Param("id")
@@ -1019,7 +930,7 @@ func dismissAlert(activityService *service.ActivityService) gin.HandlerFunc {
 }
 
 // getAlertDetails 获取告警详情
-func getAlertDetails(activityService *service.ActivityService) gin.HandlerFunc {
+func GetAlertDetails(activityService *service.ActivityService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 获取告警ID
 		alertIDStr := c.Param("id")
@@ -1046,7 +957,7 @@ func getAlertDetails(activityService *service.ActivityService) gin.HandlerFunc {
 }
 
 // generateSampleActivities 生成示例活动数据
-func generateSampleActivities(activityService *service.ActivityService) gin.HandlerFunc {
+func GenerateSampleActivities(activityService *service.ActivityService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		err := activityService.GenerateRealtimeActivities()
 		if err != nil {
@@ -1060,7 +971,7 @@ func generateSampleActivities(activityService *service.ActivityService) gin.Hand
 }
 
 // cleanupOldActivitiesAndAlerts 清理旧的活动和告警数据
-func cleanupOldActivitiesAndAlerts(activityService *service.ActivityService) gin.HandlerFunc {
+func CleanupOldActivitiesAndAlerts(activityService *service.ActivityService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		retentionDaysStr := c.DefaultQuery("retention_days", "0") // 默认清理所有数据
 		retentionDays, err := strconv.Atoi(retentionDaysStr)
