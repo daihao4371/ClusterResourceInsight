@@ -15,9 +15,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// SetupRoutes 已移动到 internal/router 包中
-// 这个文件现在只包含处理器函数
-
 // 创建集群
 func CreateCluster(clusterService *service.ClusterService) gin.HandlerFunc {
 	return func(c *gin.Context) {
