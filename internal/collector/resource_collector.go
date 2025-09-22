@@ -82,6 +82,7 @@ type PodSearchRequest struct {
 	Query      string `form:"query"`      // 搜索关键词
 	Namespace  string `form:"namespace"`  // 命名空间筛选
 	Cluster    string `form:"cluster"`    // 集群筛选
+	Status     string `form:"status"`     // 状态筛选（合理/不合理）
 	Page       int    `form:"page"`       // 页码
 	Size       int    `form:"size"`       // 每页大小
 }
@@ -1109,6 +1110,11 @@ func (mc *MultiClusterResourceCollector) filterPods(pods []PodResourceInfo, req 
 	for _, pod := range pods {
 		// 应用命名空间筛选
 		if req.Namespace != "" && pod.Namespace != req.Namespace {
+			continue
+		}
+		
+		// 应用状态筛选
+		if req.Status != "" && pod.Status != req.Status {
 			continue
 		}
 		
