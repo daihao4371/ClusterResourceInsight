@@ -27,35 +27,17 @@
           <Eye class="w-4 h-4 mr-2" />
           调试数据
         </button>
-        <button class="btn-secondary">
-          <Download class="w-4 h-4 mr-2" />
-          导出报告
-        </button>
       </div>
     </div>
 
     <!-- 统计概览 -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <MetricCard
         title="运行中的Pod"
         :value="podStats.running"
         icon="Box"
         status="success"
         trend="+2.5%"
-      />
-      <MetricCard
-        title="待调度Pod"
-        :value="podStats.pending"
-        icon="Clock"
-        status="warning"
-        trend="-12%"
-      />
-      <MetricCard
-        title="失败Pod"
-        :value="podStats.failed"
-        icon="AlertTriangle"
-        status="error"
-        trend="-8.3%"
       />
       <MetricCard
         title="CPU使用率"
@@ -316,7 +298,6 @@ import {
   AlertTriangle,
   Search,
   RefreshCw,
-  Download,
   Eye,
   RotateCw,
   TrendingUp
@@ -396,8 +377,6 @@ const pageSize = ref(20)
 // 统计数据
 const podStats = ref<PodStats>({
   running: 0,
-  pending: 0,
-  failed: 0,
   avgCpuUsage: 0
 })
 
@@ -535,16 +514,12 @@ const loadPodsData = async () => {
 // 从数据中计算统计信息
 const updateStatsFromData = () => {
   const running = pods.value.filter(p => p.status === 'Running').length
-  const pending = pods.value.filter(p => p.status === 'Pending').length
-  const failed = pods.value.filter(p => p.status === 'Failed').length
   const avgCpu = pods.value.length > 0 
     ? Math.round(pods.value.reduce((sum, p) => sum + p.cpuUsage, 0) / pods.value.length)
     : 0
     
   podStats.value = {
     running,
-    pending,
-    failed,
     avgCpuUsage: avgCpu
   }
 }
@@ -558,8 +533,6 @@ const loadStatsData = async () => {
       const stats = statsResponse.data
       podStats.value = {
         running: (stats.total_pods || 0) - (stats.unreasonable_pods || 0),
-        pending: 0, // 系统统计API可能不提供此数据
-        failed: stats.unreasonable_pods || 0,
         avgCpuUsage: Math.round(stats.avg_cpu_usage || 0)
       }
       

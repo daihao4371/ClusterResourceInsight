@@ -57,13 +57,10 @@ export interface PodSearchRequest extends PaginationParams {
 // Pod统计数据
 export interface PodStats {
   running: number
-  pending: number
-  failed: number
-  succeeded?: number
-  totalPods?: number
+  avgCpuUsage: number
+  // 后端兼容字段
   total_pods?: number          // 后端返回的字段名
   unreasonable_pods?: number   // 后端返回的字段名
-  avgCpuUsage: number
   avg_cpu_usage?: number       // 后端返回的字段名
   avgMemoryUsage?: number
 }
