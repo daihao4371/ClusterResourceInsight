@@ -84,25 +84,23 @@
         
         <select v-model="statusFilter" class="input-field">
           <option value="">所有状态</option>
-          <option value="Running">运行中</option>
-          <option value="Pending">待调度</option>
-          <option value="Failed">失败</option>
-          <option value="Succeeded">成功</option>
+          <option v-for="status in availableStatuses" :key="status" :value="status">
+            {{ formatStatusDisplay(status) }}
+          </option>
         </select>
         
         <select v-model="namespaceFilter" class="input-field">
           <option value="">所有命名空间</option>
-          <option value="default">default</option>
-          <option value="kube-system">kube-system</option>
-          <option value="monitoring">monitoring</option>
-          <option value="production">production</option>
+          <option v-for="namespace in availableNamespaces" :key="namespace" :value="namespace">
+            {{ namespace }}
+          </option>
         </select>
         
         <select v-model="clusterFilter" class="input-field">
           <option value="">所有集群</option>
-          <option value="prod-cluster-01">prod-cluster-01</option>
-          <option value="dev-cluster-02">dev-cluster-02</option>
-          <option value="test-cluster-03">test-cluster-03</option>
+          <option v-for="cluster in availableClusters" :key="cluster" :value="cluster">
+            {{ cluster }}
+          </option>
         </select>
       </div>
     </div>
@@ -314,7 +312,7 @@ import {
 } from 'lucide-vue-next'
 import MetricCard from '../components/common/MetricCard.vue'
 import { formatDistanceToNow } from '../utils/date'
-import PodsApiService, { Pod, PodStats } from '../api/pods'
+import PodsApiService, { Pod, PodStats, FilterOptions } from '../api/pods'
 import { testAPI, testDataTransformation } from '../utils/apiTest'
 
 // Pod接口定义已移到api/pods.ts中，这里创建数据转换函数
@@ -366,7 +364,9 @@ const mapStatusFilter = (frontendStatus: string): string => {
     'Running': '合理',
     'Failed': '不合理',
     'Pending': '',  // 后端可能没有对应的状态
-    'Succeeded': ''  // 后端可能没有对应的状态
+    'Succeeded': '',  // 后端可能没有对应的状态
+    '正常': '合理',
+    '异常': '不合理'
   }
   return statusMap[frontendStatus] || frontendStatus
 }
@@ -397,6 +397,24 @@ const refreshing = ref(false)
 // Pod数据
 const pods = ref<DisplayPod[]>([])        // 原始Pod数据列表
 const rawPods = ref<Pod[]>([])            // 从后端获取的原始数据
+
+// 筛选选项数据
+const availableNamespaces = ref<string[]>([])
+const availableClusters = ref<string[]>([])
+const availableStatuses = ref<string[]>([])
+
+// 格式化状态显示文本
+const formatStatusDisplay = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    '合理': '正常',
+    '不合理': '异常',
+    'Running': '运行中',
+    'Pending': '待调度',
+    'Failed': '失败',
+    'Succeeded': '成功'
+  }
+  return statusMap[status] || status
+}
 
 // 筛选后的Pod列表
 const filteredPods = computed(() => {
@@ -483,7 +501,8 @@ const loadPodsData = async () => {
       console.log('Pod数据加载成功:', {
         total: podSearchResponse.total,
         count: rawPods.value.length,
-        page: podSearchResponse.page
+        page: podSearchResponse.page,
+        筛选条件: searchParams
       })
     } else {
       throw new Error(response?.msg || '响应格式错误')
@@ -538,12 +557,43 @@ const loadStatsData = async () => {
   }
 }
 
+// 加载筛选选项 - 支持按集群筛选命名空间
+const loadFilterOptions = async (cluster?: string) => {
+  try {
+    const response = await PodsApiService.getFilterOptions(cluster)
+    
+    // 处理后端统一响应格式 {code: 0, data: {...}, msg: "操作成功"}
+    if (response && response.code === 0 && response.data) {
+      const filterOptions = response.data
+      availableNamespaces.value = filterOptions.namespaces || []
+      availableClusters.value = filterOptions.clusters || []
+      availableStatuses.value = filterOptions.statuses || []
+      
+      console.log('筛选选项加载成功:', {
+        namespaces: availableNamespaces.value.length,
+        clusters: availableClusters.value.length,
+        statuses: availableStatuses.value.length,
+        集群筛选: cluster || '全部'
+      })
+    } else {
+      throw new Error(response?.msg || '筛选选项响应格式错误')
+    }
+  } catch (err) {
+    console.warn('加载筛选选项失败，使用默认值:', err)
+    // 提供默认的筛选选项作为后备方案
+    availableNamespaces.value = ['default', 'kube-system', 'monitoring']
+    availableClusters.value = ['prod-cluster-01', 'dev-cluster-02', 'test-cluster-03']
+    availableStatuses.value = ['合理', '不合理']
+  }
+}
+
 // 刷新数据
 const refreshData = async () => {
   refreshing.value = true
   await Promise.all([
     loadPodsData(),
-    loadStatsData()
+    loadStatsData(),
+    loadFilterOptions() // 添加筛选选项的加载
   ])
   refreshing.value = false
 }
@@ -591,7 +641,8 @@ const runApiTest = async () => {
 onMounted(async () => {
   await Promise.all([
     loadPodsData(),
-    loadStatsData()
+    loadStatsData(),
+    loadFilterOptions() // 添加筛选选项的加载
   ])
 })
 
@@ -599,6 +650,24 @@ onMounted(async () => {
 watch([searchQuery, statusFilter, namespaceFilter, clusterFilter], () => {
   currentPage.value = 1
   loadPodsData()
+})
+
+// 监听集群筛选变化 - 当集群切换时重新加载筛选选项并清空命名空间筛选
+watch(clusterFilter, async (newCluster, oldCluster) => {
+  // 只有当集群真正发生变化时才执行
+  if (newCluster !== oldCluster) {
+    // 清空当前的命名空间筛选，避免显示错误的命名空间
+    namespaceFilter.value = ''
+    
+    // 重新加载筛选选项，传入选中的集群参数
+    await loadFilterOptions(newCluster || undefined)
+    
+    console.log('集群筛选变化:', {
+      从: oldCluster || '全部',
+      到: newCluster || '全部',
+      命名空间已清空: true
+    })
+  }
 })
 
 // 监听分页变化

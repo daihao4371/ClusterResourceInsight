@@ -150,3 +150,101 @@ func GetProblemsWithPagination(multiCollector *collector.MultiClusterResourceCol
 		response.OkWithData(responseData, c)
 	}
 }
+
+// GetFilterOptions 获取筛选选项 - 返回可用的命名空间、集群和状态选项，支持按集群筛选命名空间
+func GetFilterOptions(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		
+		// 获取可选的集群参数，用于筛选特定集群的命名空间
+		clusterParam := c.Query("cluster")
+		
+		// 构建搜索请求，如果提供了集群参数则只搜索该集群的Pod
+		searchReq := collector.PodSearchRequest{
+			Page:    1,
+			Size:    10000, // 获取大量数据以提取所有选项
+			Cluster: clusterParam, // 添加集群筛选参数
+		}
+		
+		podsResponse, err := multiCollector.SearchPods(ctx, searchReq)
+		if err != nil {
+			logger.Error("获取Pod数据失败: %v", err)
+			response.InternalServerError("获取筛选选项失败: "+err.Error(), c)
+			return
+		}
+		
+		// 收集唯一的命名空间、集群和状态
+		namespaceSet := make(map[string]bool)
+		clusterSet := make(map[string]bool)
+		statusSet := make(map[string]bool)
+		
+		for _, pod := range podsResponse.Pods {
+			if pod.Namespace != "" {
+				namespaceSet[pod.Namespace] = true
+			}
+			if pod.ClusterName != "" {
+				clusterSet[pod.ClusterName] = true
+			}
+			if pod.Status != "" {
+				statusSet[pod.Status] = true
+			}
+		}
+		
+		// 转换为切片并排序
+		var namespaces []string
+		for ns := range namespaceSet {
+			namespaces = append(namespaces, ns)
+		}
+		
+		var clusters []string
+		for cluster := range clusterSet {
+			clusters = append(clusters, cluster)
+		}
+		
+		var statuses []string
+		for status := range statusSet {
+			statuses = append(statuses, status)
+		}
+		
+		// 简单排序
+		for i := 0; i < len(namespaces)-1; i++ {
+			for j := i + 1; j < len(namespaces); j++ {
+				if namespaces[i] > namespaces[j] {
+					namespaces[i], namespaces[j] = namespaces[j], namespaces[i]
+				}
+			}
+		}
+		
+		for i := 0; i < len(clusters)-1; i++ {
+			for j := i + 1; j < len(clusters); j++ {
+				if clusters[i] > clusters[j] {
+					clusters[i], clusters[j] = clusters[j], clusters[i]
+				}
+			}
+		}
+		
+		for i := 0; i < len(statuses)-1; i++ {
+			for j := i + 1; j < len(statuses); j++ {
+				if statuses[i] > statuses[j] {
+					statuses[i], statuses[j] = statuses[j], statuses[i]
+				}
+			}
+		}
+		
+		filterOptions := gin.H{
+			"namespaces": namespaces,
+			"clusters":   clusters,
+			"statuses":   statuses,
+		}
+		
+		logMsg := "筛选选项获取成功: %d个命名空间, %d个集群, %d个状态"
+		if clusterParam != "" {
+			logMsg += ", 集群筛选: %s"
+			logger.Info(logMsg, len(namespaces), len(clusters), len(statuses), clusterParam)
+		} else {
+			logger.Info(logMsg, len(namespaces), len(clusters), len(statuses))
+		}
+		
+		response.OkWithData(filterOptions, c)
+	}
+}

@@ -68,6 +68,13 @@ export interface PodStats {
   avgMemoryUsage?: number
 }
 
+// 筛选选项接口
+export interface FilterOptions {
+  namespaces: string[]
+  clusters: string[]
+  statuses: string[]
+}
+
 // Pod列表响应
 export interface PodsListResponse extends PaginationResponse<Pod> {
   stats?: PodStats
@@ -182,6 +189,12 @@ export class PodsApiService {
   // 触发数据收集
   static async triggerDataCollection(): Promise<ApiResponse<any>> {
     return httpClient.post<ApiResponse<any>>('/history/collect')
+  }
+
+  // 获取筛选选项 - 支持按集群筛选命名空间
+  static async getFilterOptions(cluster?: string): Promise<ApiResponse<FilterOptions>> {
+    const params = cluster ? { cluster } : {}
+    return httpClient.get<ApiResponse<FilterOptions>>('/pods/filter-options', params)
   }
 }
 
