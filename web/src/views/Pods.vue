@@ -220,7 +220,7 @@
                 {{ formatDistanceToNow(pod.startTime) }}
               </td>
               
-              <!-- 操作 -->
+              <!-- 操作 - 保留核心功能按钮 -->
               <td class="px-6 py-4">
                 <div class="flex items-center space-x-2">
                   <button 
@@ -231,11 +231,11 @@
                     <Eye class="w-4 h-4 text-primary-400" />
                   </button>
                   <button 
-                    @click="viewPodLogs(pod)"
+                    @click="viewPodTrend(pod)"
                     class="p-1 hover:bg-white/10 rounded transition-colors"
-                    title="查看日志"
+                    title="资源趋势"
                   >
-                    <FileText class="w-4 h-4 text-success-400" />
+                    <TrendingUp class="w-4 h-4 text-success-400" />
                   </button>
                   <button 
                     v-if="pod.status === 'Failed'"
@@ -244,13 +244,6 @@
                     title="重启Pod"
                   >
                     <RotateCw class="w-4 h-4 text-warning-400" />
-                  </button>
-                  <button 
-                    @click="deletePod(pod)"
-                    class="p-1 hover:bg-white/10 rounded transition-colors"
-                    title="删除Pod"
-                  >
-                    <Trash2 class="w-4 h-4 text-danger-400" />
                   </button>
                 </div>
               </td>
@@ -294,6 +287,25 @@
         </div>
       </div>
     </div>
+
+    <!-- Pod详细分析模态框 -->
+    <PodDetailModal
+      :visible="showDetailModal"
+      :cluster="selectedPod?.cluster"
+      :namespace="selectedPod?.namespace"
+      :pod-name="selectedPod?.name"
+      @close="showDetailModal = false"
+      @open-trend="openTrendModal"
+    />
+
+    <!-- Pod趋势图表模态框 -->
+    <PodTrendModal
+      :visible="showTrendModal"
+      :cluster="selectedPod?.cluster"
+      :namespace="selectedPod?.namespace"
+      :pod-name="selectedPod?.name"
+      @close="showTrendModal = false"
+    />
   </div>
 </template>
 
@@ -306,13 +318,14 @@ import {
   RefreshCw,
   Download,
   Eye,
-  FileText,
   RotateCw,
-  Trash2
+  TrendingUp
 } from 'lucide-vue-next'
 import MetricCard from '../components/common/MetricCard.vue'
+import PodDetailModal from '../components/modals/PodDetailModal.vue'
+import PodTrendModal from '../components/modals/PodTrendModal.vue'
 import { formatDistanceToNow } from '../utils/date'
-import PodsApiService, { Pod, PodStats, PodsListResponse } from '../api/pods'
+import PodsApiService, { Pod, PodStats } from '../api/pods'
 
 // Pod接口定义已移到api/pods.ts中，这里创建数据转换函数
 interface DisplayPod {
@@ -401,6 +414,11 @@ const rawPods = ref<Pod[]>([])            // 从后端获取的原始数据
 const availableNamespaces = ref<string[]>([])
 const availableClusters = ref<string[]>([])
 const availableStatuses = ref<string[]>([])
+
+// 模态框状态
+const showDetailModal = ref(false)
+const showTrendModal = ref(false)
+const selectedPod = ref<DisplayPod | null>(null)
 
 // 格式化状态显示文本
 const formatStatusDisplay = (status: string): string => {
@@ -599,19 +617,29 @@ const refreshData = async () => {
 
 // 操作方法
 const viewPodDetail = (pod: DisplayPod) => {
-  console.log('查看Pod详情:', pod)
+  selectedPod.value = pod
+  showDetailModal.value = true
 }
 
-const viewPodLogs = (pod: DisplayPod) => {
-  console.log('查看Pod日志:', pod)
+const viewPodTrend = (pod: DisplayPod) => {
+  selectedPod.value = pod
+  showTrendModal.value = true
+}
+
+const openTrendModal = (cluster: string, namespace: string, podName: string) => {
+  // 从详情模态框打开趋势模态框
+  showDetailModal.value = false
+  // 更新selectedPod以匹配传入的参数
+  if (selectedPod.value) {
+    selectedPod.value.cluster = cluster
+    selectedPod.value.namespace = namespace
+    selectedPod.value.name = podName
+  }
+  showTrendModal.value = true
 }
 
 const restartPod = (pod: DisplayPod) => {
   console.log('重启Pod:', pod)
-}
-
-const deletePod = (pod: DisplayPod) => {
-  console.log('删除Pod:', pod)
 }
 
 // API测试方法 - 输出当前数据状态用于调试

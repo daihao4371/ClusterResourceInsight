@@ -447,3 +447,118 @@ func (mc *MultiClusterResourceCollector) filterPods(pods []PodResourceInfo, req 
 
 	return filtered
 }
+
+// GetPodDetailAnalysis 获取Pod详细分析 - 提供Pod的完整资源分析报告
+func (mc *MultiClusterResourceCollector) GetPodDetailAnalysis(ctx context.Context, clusterName, namespace, podName string) (*PodDetailAnalysis, error) {
+	logger.Info("开始获取Pod详细分析: %s/%s/%s", clusterName, namespace, podName)
+	
+	// 创建分析辅助器
+	helper := NewPodAnalysisHelper(mc)
+	
+	// 首先查找目标Pod
+	targetPod, err := helper.FindPodByIdentifier(ctx, clusterName, namespace, podName)
+	if err != nil {
+		return nil, fmt.Errorf("查找Pod失败: %v", err)
+	}
+	
+	// 获取命名空间下的相似Pod用于对比
+	similarPods, err := helper.GetSimilarPodsInNamespace(ctx, clusterName, namespace)
+	if err != nil {
+		logger.Error("获取相似Pod失败: %v", err)
+		similarPods = []PodResourceInfo{} // 使用空切片作为后备
+	}
+	
+	// 计算命名空间和集群平均值
+	nsAvg := helper.CalculateNamespaceAverage(similarPods)
+	
+	// 获取集群所有Pod数据用于计算平均值
+	allPods, err := helper.GetAllClusterPods(ctx, clusterName)
+	if err != nil {
+		logger.Error("获取集群Pod失败: %v", err)
+		allPods = []PodResourceInfo{} // 使用空切片作为后备
+	}
+	clusterAvg := helper.CalculateClusterAverage(allPods)
+	
+	// 构建详细分析结果
+	analysis := &PodDetailAnalysis{
+		PodInfo:     *targetPod,
+		ClusterInfo: fmt.Sprintf("集群: %s", clusterName),
+		NodeInfo:    fmt.Sprintf("节点: %s", targetPod.NodeName),
+		GeneratedAt: time.Now(),
+	}
+	
+	// 内存分析
+	analysis.ResourceAnalysis.MemoryAnalysis.ConfigStatus = helper.EvaluateMemoryConfigStatus(targetPod)
+	analysis.ResourceAnalysis.MemoryAnalysis.EfficiencyScore = helper.CalculateMemoryEfficiency(targetPod)
+	analysis.ResourceAnalysis.MemoryAnalysis.WasteAmount = helper.CalculateMemoryWaste(targetPod)
+	analysis.ResourceAnalysis.MemoryAnalysis.Recommendations = helper.GenerateMemoryRecommendations(targetPod)
+	
+	// CPU分析
+	analysis.ResourceAnalysis.CPUAnalysis.ConfigStatus = helper.EvaluateCPUConfigStatus(targetPod)
+	analysis.ResourceAnalysis.CPUAnalysis.EfficiencyScore = helper.CalculateCPUEfficiency(targetPod)
+	analysis.ResourceAnalysis.CPUAnalysis.WasteAmount = helper.CalculateCPUWaste(targetPod)
+	analysis.ResourceAnalysis.CPUAnalysis.Recommendations = helper.GenerateCPURecommendations(targetPod)
+	
+	// 对比分析
+	analysis.ComparisonAnalysis.NamespaceAverage.MemoryUsagePct = nsAvg.MemoryUsagePct
+	analysis.ComparisonAnalysis.NamespaceAverage.CPUUsagePct = nsAvg.CPUUsagePct
+	analysis.ComparisonAnalysis.ClusterAverage.MemoryUsagePct = clusterAvg.MemoryUsagePct
+	analysis.ComparisonAnalysis.ClusterAverage.CPUUsagePct = clusterAvg.CPUUsagePct
+	analysis.ComparisonAnalysis.SimilarPods = similarPods
+	
+	// 告警信息
+	analysis.AlertsInfo.ActiveAlerts = helper.GetActiveAlerts(clusterName, namespace, podName)
+	analysis.AlertsInfo.HistoryAlerts = helper.GetHistoryAlerts(clusterName, namespace, podName)
+	analysis.AlertsInfo.SeverityLevel = helper.CalculateSeverityLevel(targetPod)
+	analysis.AlertsInfo.AlertCount = len(analysis.AlertsInfo.ActiveAlerts) + len(analysis.AlertsInfo.HistoryAlerts)
+	
+	logger.Info("Pod详细分析完成: %s/%s/%s", clusterName, namespace, podName)
+	return analysis, nil
+}
+
+// GetPodTrendData 获取Pod历史趋势 - 提供Pod的资源使用历史趋势数据
+func (mc *MultiClusterResourceCollector) GetPodTrendData(ctx context.Context, clusterName, namespace, podName, hours string) (*PodTrendData, error) {
+	logger.Info("开始获取Pod趋势数据: %s/%s/%s, 时间范围=%s小时", clusterName, namespace, podName, hours)
+	
+	// 创建分析辅助器
+	helper := NewPodAnalysisHelper(mc)
+	
+	// 首先查找目标Pod
+	targetPod, err := helper.FindPodByIdentifier(ctx, clusterName, namespace, podName)
+	if err != nil {
+		return nil, fmt.Errorf("查找Pod失败: %v", err)
+	}
+	
+	// 解析时间范围
+	hoursInt := 24 // 默认24小时
+	if h, err := time.ParseDuration(hours + "h"); err == nil {
+		hoursInt = int(h.Hours())
+	}
+	
+	// 构建趋势数据
+	trendData := &PodTrendData{
+		PodInfo:     *targetPod,
+		GeneratedAt: time.Now(),
+	}
+	
+	// 设置时间范围
+	endTime := time.Now()
+	startTime := endTime.Add(-time.Duration(hoursInt) * time.Hour)
+	trendData.TimeRange.StartTime = startTime
+	trendData.TimeRange.EndTime = endTime
+	trendData.TimeRange.Duration = fmt.Sprintf("%d小时", hoursInt)
+	
+	// 生成模拟的趋势数据点（实际环境中应该从监控系统获取）
+	trendData.CPUTrend.DataPoints = helper.GenerateCPUTrendData(targetPod, startTime, endTime, hoursInt)
+	trendData.MemoryTrend.DataPoints = helper.GenerateMemoryTrendData(targetPod, startTime, endTime, hoursInt)
+	
+	// 计算统计信息
+	trendData.CPUTrend.Statistics = helper.CalculateCPUStatistics(trendData.CPUTrend.DataPoints)
+	trendData.MemoryTrend.Statistics = helper.CalculateMemoryStatistics(trendData.MemoryTrend.DataPoints)
+	
+	// 生成事件标记
+	trendData.EventMarkers = helper.GenerateEventMarkers(clusterName, namespace, podName, startTime, endTime)
+	
+	logger.Info("Pod趋势数据获取完成: %s/%s/%s", clusterName, namespace, podName)
+	return trendData, nil
+}

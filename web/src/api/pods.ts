@@ -75,6 +75,90 @@ export interface FilterOptions {
   statuses: string[]
 }
 
+// Pod详细分析数据类型
+export interface PodDetailAnalysis {
+  pod_info: Pod
+  cluster_info: string
+  node_info: string
+  resource_analysis: {
+    memory_analysis: {
+      config_status: string
+      efficiency_score: number
+      waste_amount: number
+      recommendations: string[]
+    }
+    cpu_analysis: {
+      config_status: string
+      efficiency_score: number
+      waste_amount: number
+      recommendations: string[]
+    }
+  }
+  comparison_analysis: {
+    namespace_average: {
+      memory_usage_pct: number
+      cpu_usage_pct: number
+    }
+    cluster_average: {
+      memory_usage_pct: number
+      cpu_usage_pct: number
+    }
+    similar_pods: Pod[]
+  }
+  alerts_info: {
+    active_alerts: string[]
+    history_alerts: string[]
+    severity_level: string
+    alert_count: number
+  }
+  generated_at: string
+}
+
+// Pod趋势数据类型
+export interface PodTrendData {
+  pod_info: Pod
+  time_range: {
+    start_time: string
+    end_time: string
+    duration: string
+  }
+  cpu_trend: {
+    data_points: Array<{
+      timestamp: string
+      usage: number
+      request: number
+      limit: number
+    }>
+    statistics: {
+      average: number
+      peak: number
+      minimum: number
+      variance: number
+    }
+  }
+  memory_trend: {
+    data_points: Array<{
+      timestamp: string
+      usage: number
+      request: number
+      limit: number
+    }>
+    statistics: {
+      average: number
+      peak: number
+      minimum: number
+      variance: number
+    }
+  }
+  event_markers: Array<{
+    timestamp: string
+    event_type: string
+    description: string
+    severity: string
+  }>
+  generated_at: string
+}
+
 // Pod列表响应
 export interface PodsListResponse extends PaginationResponse<Pod> {
   stats?: PodStats
@@ -195,6 +279,30 @@ export class PodsApiService {
   static async getFilterOptions(cluster?: string): Promise<ApiResponse<FilterOptions>> {
     const params = cluster ? { cluster } : {}
     return httpClient.get<ApiResponse<FilterOptions>>('/pods/filter-options', params)
+  }
+
+  // 获取Pod详细分析
+  static async getPodDetailAnalysis(
+    cluster: string, 
+    namespace: string, 
+    podName: string
+  ): Promise<ApiResponse<PodDetailAnalysis>> {
+    return httpClient.get<ApiResponse<PodDetailAnalysis>>(
+      `/pods/${cluster}/${namespace}/${podName}/detail`
+    )
+  }
+
+  // 获取Pod趋势数据
+  static async getPodTrendData(
+    cluster: string, 
+    namespace: string, 
+    podName: string, 
+    hours: number = 24
+  ): Promise<ApiResponse<PodTrendData>> {
+    return httpClient.get<ApiResponse<PodTrendData>>(
+      `/pods/${cluster}/${namespace}/${podName}/trend`,
+      { hours: hours.toString() }
+    )
   }
 }
 

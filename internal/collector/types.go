@@ -114,6 +114,173 @@ type MultiClusterResourceCollector struct {
 	analysisCacheTTL time.Duration // 分析结果缓存生存时间
 }
 
+// PodDetailAnalysis Pod详细分析结果 - 包含单个Pod的完整资源分析报告
+type PodDetailAnalysis struct {
+	// 基础信息
+	PodInfo      PodResourceInfo `json:"pod_info"`       // Pod基础资源信息
+	ClusterInfo  string          `json:"cluster_info"`   // 集群环境信息
+	NodeInfo     string          `json:"node_info"`      // 节点信息
+	
+	// 资源配置分析
+	ResourceAnalysis struct {
+		MemoryAnalysis struct {
+			ConfigStatus    string  `json:"config_status"`     // 内存配置状态评估
+			EfficiencyScore float64 `json:"efficiency_score"`  // 内存使用效率评分
+			WasteAmount     int64   `json:"waste_amount"`      // 浪费的内存资源量
+			Recommendations []string `json:"recommendations"`  // 内存优化建议
+		} `json:"memory_analysis"`
+		
+		CPUAnalysis struct {
+			ConfigStatus    string  `json:"config_status"`     // CPU配置状态评估
+			EfficiencyScore float64 `json:"efficiency_score"`  // CPU使用效率评分
+			WasteAmount     int64   `json:"waste_amount"`      // 浪费的CPU资源量
+			Recommendations []string `json:"recommendations"`  // CPU优化建议
+		} `json:"cpu_analysis"`
+	} `json:"resource_analysis"`
+	
+	// 对比分析
+	ComparisonAnalysis struct {
+		NamespaceAverage struct {
+			MemoryUsagePct float64 `json:"memory_usage_pct"` // 命名空间平均内存使用率
+			CPUUsagePct    float64 `json:"cpu_usage_pct"`    // 命名空间平均CPU使用率
+		} `json:"namespace_average"`
+		
+		ClusterAverage struct {
+			MemoryUsagePct float64 `json:"memory_usage_pct"` // 集群平均内存使用率
+			CPUUsagePct    float64 `json:"cpu_usage_pct"`    // 集群平均CPU使用率
+		} `json:"cluster_average"`
+		
+		SimilarPods []PodResourceInfo `json:"similar_pods"` // 同命名空间相似Pod列表
+	} `json:"comparison_analysis"`
+	
+	// 告警信息
+	AlertsInfo struct {
+		ActiveAlerts    []string `json:"active_alerts"`     // 当前活跃告警
+		HistoryAlerts   []string `json:"history_alerts"`    // 历史告警记录
+		SeverityLevel   string   `json:"severity_level"`    // 告警严重程度
+		AlertCount      int      `json:"alert_count"`       // 告警总数
+	} `json:"alerts_info"`
+	
+	GeneratedAt time.Time `json:"generated_at"` // 分析报告生成时间
+}
+
+// PodTrendData Pod历史趋势数据 - 包含Pod的资源使用历史趋势信息
+type PodTrendData struct {
+	// 基础信息
+	PodInfo     PodResourceInfo `json:"pod_info"`     // Pod基础信息
+	TimeRange   struct {
+		StartTime time.Time `json:"start_time"` // 趋势数据开始时间
+		EndTime   time.Time `json:"end_time"`   // 趋势数据结束时间
+		Duration  string    `json:"duration"`   // 时间跨度描述
+	} `json:"time_range"`
+	
+	// CPU趋势数据
+	CPUTrend struct {
+		DataPoints []struct {
+			Timestamp time.Time `json:"timestamp"` // 数据采集时间点
+			Usage     float64   `json:"usage"`     // CPU使用率百分比
+			Request   int64     `json:"request"`   // CPU请求量 (millicores)
+			Limit     int64     `json:"limit"`     // CPU限制量 (millicores)
+		} `json:"data_points"`
+		
+		Statistics struct {
+			Average    float64 `json:"average"`     // 平均使用率
+			Peak       float64 `json:"peak"`        // 峰值使用率
+			Minimum    float64 `json:"minimum"`     // 最低使用率
+			Variance   float64 `json:"variance"`    // 使用率方差
+		} `json:"statistics"`
+	} `json:"cpu_trend"`
+	
+	// 内存趋势数据
+	MemoryTrend struct {
+		DataPoints []struct {
+			Timestamp time.Time `json:"timestamp"` // 数据采集时间点
+			Usage     float64   `json:"usage"`     // 内存使用率百分比
+			Request   int64     `json:"request"`   // 内存请求量 (bytes)
+			Limit     int64     `json:"limit"`     // 内存限制量 (bytes)
+		} `json:"data_points"`
+		
+		Statistics struct {
+			Average    float64 `json:"average"`     // 平均使用率
+			Peak       float64 `json:"peak"`        // 峰值使用率
+			Minimum    float64 `json:"minimum"`     // 最低使用率
+			Variance   float64 `json:"variance"`    // 使用率方差
+		} `json:"statistics"`
+	} `json:"memory_trend"`
+	
+	// 异常事件标记
+	EventMarkers []struct {
+		Timestamp   time.Time `json:"timestamp"`   // 事件发生时间
+		EventType   string    `json:"event_type"`  // 事件类型 (alert/restart/config_change)
+		Description string    `json:"description"` // 事件描述
+		Severity    string    `json:"severity"`    // 严重程度
+	} `json:"event_markers"`
+	
+	GeneratedAt time.Time `json:"generated_at"` // 趋势数据生成时间
+}
+
+// PodOptimizationReport Pod优化建议报告 - 包含基于历史数据的资源优化建议
+type PodOptimizationReport struct {
+	// 基础信息
+	PodInfo        PodResourceInfo `json:"pod_info"`         // Pod基础信息
+	AnalysisPeriod struct {
+		StartTime time.Time `json:"start_time"` // 分析期间开始时间
+		EndTime   time.Time `json:"end_time"`   // 分析期间结束时间
+		Duration  string    `json:"duration"`   // 分析时长描述
+	} `json:"analysis_period"`
+	
+	// 资源配置建议
+	ResourceRecommendations struct {
+		Memory struct {
+			CurrentRequest     int64   `json:"current_request"`      // 当前内存请求量
+			RecommendedRequest int64   `json:"recommended_request"`  // 建议内存请求量
+			CurrentLimit       int64   `json:"current_limit"`        // 当前内存限制量
+			RecommendedLimit   int64   `json:"recommended_limit"`    // 建议内存限制量
+			PotentialSavings   int64   `json:"potential_savings"`    // 潜在节省的内存量
+			Confidence         float64 `json:"confidence"`           // 建议可信度评分
+			Reasoning          string  `json:"reasoning"`            // 建议依据说明
+		} `json:"memory"`
+		
+		CPU struct {
+			CurrentRequest     int64   `json:"current_request"`      // 当前CPU请求量
+			RecommendedRequest int64   `json:"recommended_request"`  // 建议CPU请求量
+			CurrentLimit       int64   `json:"current_limit"`        // 当前CPU限制量
+			RecommendedLimit   int64   `json:"recommended_limit"`    // 建议CPU限制量
+			PotentialSavings   int64   `json:"potential_savings"`    // 潜在节省的CPU量
+			Confidence         float64 `json:"confidence"`           // 建议可信度评分
+			Reasoning          string  `json:"reasoning"`            // 建议依据说明
+		} `json:"cpu"`
+	} `json:"resource_recommendations"`
+	
+	// 成本优化分析
+	CostOptimization struct {
+		CurrentMonthlyCost    float64 `json:"current_monthly_cost"`     // 当前月度成本估算
+		OptimizedMonthlyCost  float64 `json:"optimized_monthly_cost"`   // 优化后月度成本估算
+		PotentialSavings      float64 `json:"potential_savings"`        // 潜在月度节省成本
+		SavingsPercentage     float64 `json:"savings_percentage"`       // 节省百分比
+		ROIEstimate           string  `json:"roi_estimate"`             // 投资回报率估算
+	} `json:"cost_optimization"`
+	
+	// 性能优化建议
+	PerformanceOptimization struct {
+		BottleneckAnalysis []string `json:"bottleneck_analysis"`  // 性能瓶颈分析
+		ScalingRecommendations []string `json:"scaling_recommendations"` // 扩缩容建议
+		PerformanceRisks   []string `json:"performance_risks"`    // 性能风险提示
+		OptimizationTips   []string `json:"optimization_tips"`    // 性能优化技巧
+	} `json:"performance_optimization"`
+	
+	// 实施建议
+	ImplementationGuide struct {
+		Priority        string   `json:"priority"`         // 实施优先级 (high/medium/low)
+		Steps          []string  `json:"steps"`            // 实施步骤
+		RiskAssessment string    `json:"risk_assessment"`  // 风险评估
+		TestingAdvice  []string  `json:"testing_advice"`   // 测试建议
+		RollbackPlan   string    `json:"rollback_plan"`    // 回滚方案
+	} `json:"implementation_guide"`
+	
+	GeneratedAt time.Time `json:"generated_at"` // 报告生成时间
+}
+
 // NewResourceCollector 创建单集群资源收集器实例
 // 参数:
 //   - kubeClient: Kubernetes API客户端，用于访问集群基础资源

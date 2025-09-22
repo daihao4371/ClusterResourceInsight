@@ -45,3 +45,21 @@ type ResourceExtractor interface {
 	ExtractContainerResources(containers interface{}) (memReq, memLimit, cpuReq, cpuLimit int64)
 	EstimateResourceUsage(actualUsage, request, limit int64) int64
 }
+
+// PodAnalyzer Pod分析器接口 - 定义Pod详细分析和优化建议的核心契约
+type PodAnalyzer interface {
+	GetPodDetailAnalysis(ctx context.Context, clusterName, namespace, podName string) (*PodDetailAnalysis, error)
+	GetPodTrendData(ctx context.Context, clusterName, namespace, podName, hours string) (*PodTrendData, error)
+	GeneratePodOptimizationReport(ctx context.Context, clusterName, namespace, podName, days string) (*PodOptimizationReport, error)
+}
+
+// MonitoringDataProvider 监控数据提供器接口 - 定义历史监控数据获取的核心契约
+type MonitoringDataProvider interface {
+	GetPodHistoryMetrics(clusterName, namespace, podName string, hours int) ([]struct {
+		Timestamp   string  `json:"timestamp"`
+		CPUUsage    float64 `json:"cpu_usage"`
+		MemoryUsage float64 `json:"memory_usage"`
+	}, error)
+	GetSimilarPodsInNamespace(clusterName, namespace string) ([]PodResourceInfo, error)
+	GetClusterAverageUsage(clusterName string) (cpuAvg, memoryAvg float64, err error)
+}

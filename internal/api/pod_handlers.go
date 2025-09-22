@@ -248,3 +248,58 @@ func GetFilterOptions(multiCollector *collector.MultiClusterResourceCollector) g
 		response.OkWithData(filterOptions, c)
 	}
 }
+
+// GetPodDetailAnalysis 获取Pod详细分析 - 提供Pod的完整资源分析报告
+func GetPodDetailAnalysis(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		clusterName := c.Param("cluster")
+		namespace := c.Param("namespace")  
+		podName := c.Param("pod")
+		
+		if clusterName == "" || namespace == "" || podName == "" {
+			response.BadRequest("缺少必要参数: cluster, namespace, pod", c)
+			return
+		}
+		
+		// 调用多集群收集器获取Pod详细分析
+		analysis, err := multiCollector.GetPodDetailAnalysis(c.Request.Context(), clusterName, namespace, podName)
+		if err != nil {
+			logger.Error("获取Pod详细分析失败: cluster=%s, namespace=%s, pod=%s, error=%v", 
+				clusterName, namespace, podName, err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+		
+		logger.Info("获取Pod详细分析成功: %s/%s/%s", clusterName, namespace, podName)
+		response.OkWithData(analysis, c)
+	}
+}
+
+// GetPodTrendData 获取Pod历史趋势 - 提供Pod的资源使用历史趋势数据
+func GetPodTrendData(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		clusterName := c.Param("cluster")
+		namespace := c.Param("namespace")
+		podName := c.Param("pod")
+		
+		// 获取可选的时间范围参数
+		hours := c.DefaultQuery("hours", "24") // 默认查询最近24小时
+		
+		if clusterName == "" || namespace == "" || podName == "" {
+			response.BadRequest("缺少必要参数: cluster, namespace, pod", c)
+			return
+		}
+		
+		// 调用多集群收集器获取Pod趋势数据
+		trendData, err := multiCollector.GetPodTrendData(c.Request.Context(), clusterName, namespace, podName, hours)
+		if err != nil {
+			logger.Error("获取Pod趋势数据失败: cluster=%s, namespace=%s, pod=%s, hours=%s, error=%v", 
+				clusterName, namespace, podName, hours, err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+		
+		logger.Info("获取Pod趋势数据成功: %s/%s/%s, 时间范围=%s小时", clusterName, namespace, podName, hours)
+		response.OkWithData(trendData, c)
+	}
+}
