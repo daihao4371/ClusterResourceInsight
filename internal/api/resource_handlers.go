@@ -42,7 +42,7 @@ func GetResourceAnalysis(resourceCollector *collector.ResourceCollector) gin.Han
 		}
 
 		// 应用分页
-		pagedProblems, paginationResult := paginationHandler.ApplyPaginationToSlice(filteredProblems, paginationParams)
+		pagedProblems, total, _, _ := collector.ApplyPagination(filteredProblems, paginationParams.Page, paginationParams.Size)
 
 		// 构造分页响应
 		pagedResult := &collector.AnalysisResult{
@@ -57,7 +57,7 @@ func GetResourceAnalysis(resourceCollector *collector.ResourceCollector) gin.Han
 			result.TotalPods, result.UnreasonablePods, paginationParams.Page, paginationParams.Size, clusterName)
 
 		// 使用统一的分页响应构建器
-		responseData := paginationHandler.BuildPaginationResponse(paginationParams, paginationResult.Total, pagedResult)
+		responseData := paginationHandler.BuildPaginationResponse(paginationParams, total, pagedResult)
 		responseData["filter"] = gin.H{
 			"cluster_name": clusterName,
 		}

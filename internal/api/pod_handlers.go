@@ -133,17 +133,17 @@ func GetProblemsWithPagination(multiCollector *collector.MultiClusterResourceCol
 		}
 
 		// 应用排序
-		podSorter := utils.NewPodSorter()
+		podSorter := collector.NewPodSorter()
 		podSorter.SortProblems(filteredProblems, sortBy)
 
-		// 使用统一的分页处理器应用分页
-		pagedProblems, paginationResult := paginationHandler.ApplyPaginationToSlice(filteredProblems, paginationParams)
+		// 使用collector包的分页功能
+		pagedProblems, total, _, _ := collector.ApplyPagination(filteredProblems, paginationParams.Page, paginationParams.Size)
 
 		logger.Info("问题Pod分页查询完成: total=%d, page=%d, size=%d, cluster=%s, sort=%s",
-			paginationResult.Total, paginationParams.Page, paginationParams.Size, clusterName, sortBy)
+			total, paginationParams.Page, paginationParams.Size, clusterName, sortBy)
 
 		// 使用统一的分页响应构建器
-		responseData := paginationHandler.BuildPaginationResponse(paginationParams, paginationResult.Total, pagedProblems)
+		responseData := paginationHandler.BuildPaginationResponse(paginationParams, total, pagedProblems)
 		responseData["cluster_name"] = clusterName
 		responseData["sort_by"] = sortBy
 

@@ -25,7 +25,7 @@
         </button>
         <button @click="runApiTest" class="btn-secondary">
           <Eye class="w-4 h-4 mr-2" />
-          测试API
+          调试数据
         </button>
         <button class="btn-secondary">
           <Download class="w-4 h-4 mr-2" />
@@ -312,8 +312,7 @@ import {
 } from 'lucide-vue-next'
 import MetricCard from '../components/common/MetricCard.vue'
 import { formatDistanceToNow } from '../utils/date'
-import PodsApiService, { Pod, PodStats, FilterOptions } from '../api/pods'
-import { testAPI, testDataTransformation } from '../utils/apiTest'
+import PodsApiService, { Pod, PodStats, PodsListResponse } from '../api/pods'
 
 // Pod接口定义已移到api/pods.ts中，这里创建数据转换函数
 interface DisplayPod {
@@ -488,9 +487,9 @@ const loadPodsData = async () => {
     // 调用API获取Pod数据
     const response = await PodsApiService.getPodsWithSearch(searchParams)
     
-    // 处理后端统一响应格式 {code: 0, data: {...}, msg: "操作成功"}
+    // 处理后端统一响应格式 {code: 0, data: {...}, message: "操作成功"}
     if (response && response.code === 0 && response.data) {
-      // 从响应中提取实际的Pod数据
+      // 从响应中提取实际的Pod数据 - 后端返回PodSearchResponse结构
       const podSearchResponse = response.data
       rawPods.value = podSearchResponse.pods || []
       pods.value = rawPods.value.map(transformPodData)
@@ -505,7 +504,7 @@ const loadPodsData = async () => {
         筛选条件: searchParams
       })
     } else {
-      throw new Error(response?.msg || '响应格式错误')
+      throw new Error(response?.message || '响应格式错误')
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : '加载Pod数据失败'
@@ -548,7 +547,7 @@ const loadStatsData = async () => {
       
       console.log('统计数据加载成功:', podStats.value)
     } else {
-      throw new Error(statsResponse?.msg || '统计数据响应格式错误')
+      throw new Error(statsResponse?.message || '统计数据响应格式错误')
     }
   } catch (err) {
     console.warn('加载统计数据失败，使用默认值:', err)
@@ -576,7 +575,7 @@ const loadFilterOptions = async (cluster?: string) => {
         集群筛选: cluster || '全部'
       })
     } else {
-      throw new Error(response?.msg || '筛选选项响应格式错误')
+      throw new Error(response?.message || '筛选选项响应格式错误')
     }
   } catch (err) {
     console.warn('加载筛选选项失败，使用默认值:', err)
@@ -615,15 +614,9 @@ const deletePod = (pod: DisplayPod) => {
   console.log('删除Pod:', pod)
 }
 
-// API测试方法
+// API测试方法 - 输出当前数据状态用于调试
 const runApiTest = async () => {
-  console.log('🔧 开始运行API测试...')
-  
-  // 运行数据转换测试
-  testDataTransformation()
-  
-  // 运行API测试
-  await testAPI()
+  console.log('🔧 开始运行数据状态检查...')
   
   console.log('📋 当前Pod数据状态:')
   console.log('- 原始Pod数量:', rawPods.value.length)
@@ -635,6 +628,9 @@ const runApiTest = async () => {
   if (pods.value.length > 0) {
     console.log('- 第一个Pod示例:', pods.value[0])
   }
+  
+  // 重新加载数据以确保最新状态
+  await refreshData()
 }
 
 // 页面初始化

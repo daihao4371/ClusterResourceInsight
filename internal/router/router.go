@@ -43,6 +43,7 @@ func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollec
 		podsGroup.GET("/search", api.SearchPods(multiCollector))
 		podsGroup.GET("/list", api.ListPods(multiCollector))
 		podsGroup.GET("/problems", api.GetProblemsWithPagination(multiCollector))
+		podsGroup.GET("/filter-options", api.GetFilterOptions(multiCollector)) // 新增筛选选项接口
 	}
 
 	// 新增的历史数据接口
