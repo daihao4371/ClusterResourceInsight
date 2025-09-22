@@ -162,6 +162,27 @@ func initDefaultSettings() error {
 	return nil
 }
 
+// CheckAndAutoMigrate 检查数据库表是否存在，如果不存在则自动执行迁移
+func CheckAndAutoMigrate() error {
+	// 检查关键表是否存在
+	logger.Info("正在检查数据库表是否存在...")
+	if !DB.Migrator().HasTable(&models.ClusterConfig{}) {
+		logger.Info("检测到数据库表不存在，正在自动执行迁移...")
+		if err := MigrateDatabase(); err != nil {
+			return fmt.Errorf("自动迁移失败: %v\n\n"+
+				"请手动执行以下命令来创建数据库表:\n"+
+				"  ./bin/cluster-resource-insight --migrate\n"+
+				"或者:\n"+
+				"  go run cmd/main.go --migrate", err)
+		}
+		logger.Info("数据库表自动创建完成")
+	} else {
+		logger.Info("数据库表已存在，跳过迁移")
+	}
+
+	return nil
+}
+
 // GetDB 获取数据库连接实例
 func GetDB() *gorm.DB {
 	return DB

@@ -8,6 +8,7 @@ web/dist/
 web-legacy/dist/
 *.map
 web/前端生成页面prompt.md
+**/前端生成页面prompt.md
 
 # Go编译产物
 bin/

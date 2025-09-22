@@ -299,22 +299,25 @@ func (cs *ClusterService) CreateKubernetesClient(cluster *models.ClusterConfig) 
 			TLSClientConfig: rest.TLSClientConfig{
 				CertData: []byte(authConfig.ClientCert),
 				KeyData:  []byte(authConfig.ClientKey),
+				// 在内网环境中跳过证书验证，解决IP地址不匹配问题
+				Insecure: true,
 			},
 			// 增加超时配置以防止长时间等待
 			Timeout: 60 * time.Second,
 		}
-		if authConfig.CACert != "" {
-			config.TLSClientConfig.CAData = []byte(authConfig.CACert)
-		} else {
-			config.TLSClientConfig.Insecure = true
-		}
+		// 注意：当设置Insecure为true时，不能同时设置CA证书，否则会报错
+		// 在内网环境中，我们选择跳过证书验证来解决主机名不匹配问题
 	case "kubeconfig":
 		config, err = clientcmd.RESTConfigFromKubeConfig([]byte(authConfig.KubeConfig))
 		if err != nil {
 			return nil, nil, fmt.Errorf("解析kubeconfig失败: %v", err)
 		}
-		// 为kubeconfig方式也设置超时配置
+		// 为kubeconfig方式也设置超时配置和跳过证书验证
 		config.Timeout = 60 * time.Second
+		// 清除可能存在的CA证书配置，然后设置跳过证书验证
+		config.TLSClientConfig.CAData = nil
+		config.TLSClientConfig.CAFile = ""
+		config.TLSClientConfig.Insecure = true
 	default:
 		return nil, nil, fmt.Errorf("不支持的认证类型: %s", cluster.AuthType)
 	}
