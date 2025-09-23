@@ -93,7 +93,15 @@
         <div v-if="systemStore.trendLoading" class="flex items-center justify-center h-80">
           <div class="text-gray-400">加载中...</div>
         </div>
-        <ResourceTrendChart v-else :data="systemStore.trendData" />
+        <div v-else-if="!chartDataForTrend || !chartDataForTrend.labels || chartDataForTrend.labels.length === 0" 
+             class="flex items-center justify-center h-80">
+          <div class="text-center text-gray-400">
+            <div class="text-lg mb-2">📊</div>
+            <div>暂无趋势数据</div>
+            <div class="text-sm mt-1">请等待数据收集完成</div>
+          </div>
+        </div>
+        <ResourceTrendChart v-else :data="chartDataForTrend" />
       </div>
     </div>
 
@@ -267,6 +275,32 @@ const clusterData = computed(() => {
   }
   // 使用后端提供的实际数据
   return stats.cluster_status_distribution
+})
+
+// 将TrendData[]转换为Chart.js格式的数据
+const chartDataForTrend = computed(() => {
+  const trendData = systemStore.trendData
+  if (!trendData || trendData.length === 0) {
+    return null
+  }
+
+  // 提取时间标签
+  const labels = trendData.map(item => item.time)
+  
+  // 提取CPU数据（默认显示CPU使用趋势）
+  const cpuData = trendData.map(item => item.cpu || 0)
+  
+  return {
+    labels,
+    datasets: [{
+      label: 'CPU使用率',
+      data: cpuData,
+      borderColor: '#fb7185',
+      backgroundColor: 'rgba(251, 113, 133, 0.1)',
+      tension: 0.4,
+      fill: true
+    }]
+  }
 })
 
 // 时间范围改变处理

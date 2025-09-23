@@ -50,9 +50,28 @@ export const useSystemStore = defineStore('system', () => {
     try {
       const response = await api.get(`/history/system-trends?hours=${hours}`)
       
-      if (response.data?.code === 0 && response.data?.data?.data) {
-        trendData.value = response.data.data.data
+      // 调试日志
+      console.log('趋势数据API响应:', response.data)
+      
+      if (response.data?.code === 0 && response.data?.data) {
+        // 检查数据格式，支持多种可能的响应结构
+        let trendDataArray = response.data.data
+        
+        // 如果data是包装对象，进一步提取
+        if (trendDataArray.data && Array.isArray(trendDataArray.data)) {
+          trendDataArray = trendDataArray.data
+        }
+        
+        // 确保是数组格式
+        if (Array.isArray(trendDataArray) && trendDataArray.length > 0) {
+          trendData.value = trendDataArray
+          console.log('成功解析趋势数据:', trendDataArray.length, '条记录')
+        } else {
+          console.warn('后端返回的趋势数据格式异常，使用模拟数据')
+          trendData.value = generateMockTrendData(hours)
+        }
       } else {
+        console.warn('趋势数据API响应格式异常:', response.data)
         // 如果后端返回空数据，使用模拟数据确保图表正常显示
         trendData.value = generateMockTrendData(hours)
       }
