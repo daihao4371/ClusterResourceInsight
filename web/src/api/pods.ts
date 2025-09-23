@@ -162,7 +162,8 @@ export interface PodsListResponse extends PaginationResponse<Pod> {
 }
 
 // API基础URL
-const API_BASE_URL = typeof process !== 'undefined' && process.env.NODE_ENV === 'production' 
+let process;
+const API_BASE_URL = typeof process !== 'undefined' && process.env.NODE_ENV === 'production'
   ? '/api' 
   : 'http://localhost:9999/api'
 
