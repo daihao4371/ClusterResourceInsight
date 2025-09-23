@@ -15,13 +15,15 @@ import (
 
 // ActivityService 活动服务管理器
 type ActivityService struct {
-	db *gorm.DB
+	db        *gorm.DB
+	optimizer *ActivityOptimizer
 }
 
 // NewActivityService 创建活动服务实例
 func NewActivityService() *ActivityService {
 	return &ActivityService{
-		db: database.GetDB(),
+		db:        database.GetDB(),
+		optimizer: NewActivityOptimizer(),
 	}
 }
 
@@ -45,8 +47,27 @@ type AlertItem struct {
 	Status      string `json:"status"`
 }
 
-// RecordActivity 记录系统活动
+// RecordActivity 记录系统活动（集成优化检查）
 func (s *ActivityService) RecordActivity(activityType, title, message, source string, clusterID uint, details map[string]interface{}) error {
+	activity := &models.SystemActivity{
+		Type:      activityType,
+		ClusterID: clusterID,
+		Title:     title,
+		Message:   message,
+		Source:    source,
+		CreatedAt: time.Now(),
+	}
+	
+	// 检查是否应该记录此活动
+	shouldRecord, err := s.optimizer.CheckBeforeRecord(activity)
+	if err != nil {
+		logger.Warn("检查活动记录失败，继续记录: %v", err)
+	} else if !shouldRecord {
+		// 跳过重复活动
+		return nil
+	}
+	
+	// 序列化详情
 	var detailsJSON string
 	if details != nil {
 		detailsBytes, err := json.Marshal(details)
@@ -57,16 +78,7 @@ func (s *ActivityService) RecordActivity(activityType, title, message, source st
 			detailsJSON = string(detailsBytes)
 		}
 	}
-
-	activity := &models.SystemActivity{
-		Type:      activityType,
-		ClusterID: clusterID,
-		Title:     title,
-		Message:   message,
-		Source:    source,
-		Details:   detailsJSON,
-		CreatedAt: time.Now(),
-	}
+	activity.Details = detailsJSON
 
 	if err := s.db.Create(activity).Error; err != nil {
 		return fmt.Errorf("记录系统活动失败: %w", err)
@@ -703,4 +715,128 @@ func (s *ActivityService) CreateAlert(clusterID uint, level, title, message, sta
 
 	logger.Info("创建系统告警: level=%s, title=%s, cluster_id=%d", level, title, clusterID)
 	return nil
+}
+
+// OptimizeActivities 执行活动优化
+func (s *ActivityService) OptimizeActivities() (*OptimizationResult, error) {
+	return s.optimizer.OptimizeActivities()
+}
+
+// GetOptimizationConfig 获取优化配置
+func (s *ActivityService) GetOptimizationConfig() (*OptimizationConfig, error) {
+	return s.optimizer.LoadOptimizationConfig()
+}
+
+// UpdateOptimizationConfig 更新优化配置
+func (s *ActivityService) UpdateOptimizationConfig(config *OptimizationConfig) error {
+	return s.optimizer.SaveOptimizationConfig(config)
+}
+
+// GetActivityStats 获取活动统计信息
+func (s *ActivityService) GetActivityStats(hours int) (map[string]interface{}, error) {
+	if hours <= 0 {
+		hours = 24
+	}
+	
+	startTime := time.Now().Add(-time.Duration(hours) * time.Hour)
+	
+	// 统计总活动数
+	var totalCount int64
+	err := s.db.Model(&models.SystemActivity{}).
+		Where("created_at > ?", startTime).
+		Count(&totalCount).Error
+	if err != nil {
+		return nil, fmt.Errorf("统计总活动数失败: %w", err)
+	}
+	
+	// 按类型统计
+	var typeStats []struct {
+		Type  string `json:"type"`
+		Count int64  `json:"count"`
+	}
+	err = s.db.Model(&models.SystemActivity{}).
+		Select("type, COUNT(*) as count").
+		Where("created_at > ?", startTime).
+		Group("type").
+		Find(&typeStats).Error
+	if err != nil {
+		return nil, fmt.Errorf("按类型统计失败: %w", err)
+	}
+	
+	// 按来源统计
+	var sourceStats []struct {
+		Source string `json:"source"`
+		Count  int64  `json:"count"`
+	}
+	err = s.db.Model(&models.SystemActivity{}).
+		Select("source, COUNT(*) as count").
+		Where("created_at > ?", startTime).
+		Group("source").
+		Find(&sourceStats).Error
+	if err != nil {
+		return nil, fmt.Errorf("按来源统计失败: %w", err)
+	}
+	
+	// 按集群统计
+	var clusterStats []struct {
+		ClusterID uint  `json:"cluster_id"`
+		Count     int64 `json:"count"`
+	}
+	err = s.db.Model(&models.SystemActivity{}).
+		Select("cluster_id, COUNT(*) as count").
+		Where("created_at > ? AND cluster_id > 0", startTime).
+		Group("cluster_id").
+		Find(&clusterStats).Error
+	if err != nil {
+		return nil, fmt.Errorf("按集群统计失败: %w", err)
+	}
+	
+	// 时间趋势统计（按小时）
+	var hourlyStats []struct {
+		Hour  int   `json:"hour"`
+		Count int64 `json:"count"`
+	}
+	err = s.db.Model(&models.SystemActivity{}).
+		Select("EXTRACT(HOUR FROM created_at) as hour, COUNT(*) as count").
+		Where("created_at > ?", startTime).
+		Group("EXTRACT(HOUR FROM created_at)").
+		Order("hour").
+		Find(&hourlyStats).Error
+	if err != nil {
+		logger.Warn("时间趋势统计失败: %v", err)
+		// 不影响主要统计结果
+	}
+	
+	// 构建返回结果
+	byType := make(map[string]int64)
+	for _, stat := range typeStats {
+		byType[stat.Type] = stat.Count
+	}
+	
+	bySource := make(map[string]int64)
+	for _, stat := range sourceStats {
+		bySource[stat.Source] = stat.Count
+	}
+	
+	byCluster := make(map[uint]int64)
+	for _, stat := range clusterStats {
+		byCluster[stat.ClusterID] = stat.Count
+	}
+	
+	hourlyTrend := make(map[int]int64)
+	for _, stat := range hourlyStats {
+		hourlyTrend[stat.Hour] = stat.Count
+	}
+	
+	result := map[string]interface{}{
+		"hours":            hours,
+		"total_activities": totalCount,
+		"by_type":          byType,
+		"by_source":        bySource,
+		"by_cluster":       byCluster,
+		"hourly_trend":     hourlyTrend,
+		"generated_at":     time.Now(),
+	}
+	
+	return result, nil
 }

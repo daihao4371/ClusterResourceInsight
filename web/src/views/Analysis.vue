@@ -29,7 +29,7 @@
 
 
     <!-- 深度分析功能区 -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
       <!-- Top内存请求Pod -->
       <div class="glass-card">
         <div class="p-6 border-b border-gray-700">
@@ -150,6 +150,182 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- 活动数据优化 -->
+      <div class="glass-card">
+        <div class="p-6 border-b border-gray-700">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold">活动数据优化</h3>
+            <button 
+              class="btn-secondary text-sm"
+              @click="toggleOptimizationConfig"
+              :disabled="loadingOptimization"
+            >
+              <Settings :class="['w-3 h-3 mr-1', { 'animate-spin': loadingOptimization }]" />
+              配置
+            </button>
+          </div>
+        </div>
+        <div class="p-4">
+          <!-- 优化统计显示 -->
+          <div v-if="optimizationResult" class="space-y-3 mb-4">
+            <div class="text-sm text-gray-400">最近优化结果</div>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+              <div class="bg-dark-800/30 p-2 rounded">
+                <div class="text-gray-400">去重</div>
+                <div class="text-white font-medium">{{ optimizationResult.duplicates_removed || 0 }}条</div>
+              </div>
+              <div class="bg-dark-800/30 p-2 rounded">
+                <div class="text-gray-400">降噪</div>
+                <div class="text-white font-medium">{{ optimizationResult.noise_filtered || 0 }}条</div>
+              </div>
+              <div class="bg-dark-800/30 p-2 rounded">
+                <div class="text-gray-400">聚合</div>
+                <div class="text-white font-medium">{{ optimizationResult.aggregations?.length || 0 }}组</div>
+              </div>
+              <div class="bg-dark-800/30 p-2 rounded">
+                <div class="text-gray-400">处理时间</div>
+                <div class="text-white font-medium text-xs">{{ formatOptimizationTime(optimizationResult.processed_at) }}</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 操作按钮 -->
+          <div class="space-y-2">
+            <button 
+              class="w-full btn-primary text-sm"
+              @click="executeOptimization"
+              :disabled="loadingOptimization"
+            >
+              <Zap :class="['w-4 h-4 mr-2', { 'animate-pulse': loadingOptimization }]" />
+              {{ loadingOptimization ? '优化中...' : '执行优化' }}
+            </button>
+            <div class="text-xs text-gray-500 text-center">
+              自动去重、降噪和聚合系统活动数据
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 优化配置弹窗 -->
+    <div v-if="showOptimizationConfig" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click="closeOptimizationConfig">
+      <div class="bg-dark-800 rounded-lg p-6 w-full max-w-md m-4" @click.stop>
+        <div class="flex items-center justify-between mb-6">
+          <h3 class="text-lg font-semibold">活动优化配置</h3>
+          <button @click="closeOptimizationConfig" class="text-gray-400 hover:text-white">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div v-if="optimizationConfig" class="space-y-4">
+          <!-- 去重配置 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-2">去重时间窗口（分钟）</label>
+            <input 
+              v-model.number="optimizationConfig.deduplication_window"
+              type="number"
+              min="10"
+              max="120"
+              class="w-full input-field"
+              placeholder="30"
+            />
+            <div class="text-xs text-gray-500 mt-1">在此时间窗口内的重复活动将被去重</div>
+          </div>
+          
+          <!-- 最大重复次数 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-2">最大重复次数</label>
+            <input 
+              v-model.number="optimizationConfig.max_duplicate_count"
+              type="number"
+              min="1"
+              max="10"
+              class="w-full input-field"
+              placeholder="3"
+            />
+            <div class="text-xs text-gray-500 mt-1">超过此数量的重复活动将被删除</div>
+          </div>
+          
+          <!-- 聚合阈值 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-2">聚合阈值</label>
+            <input 
+              v-model.number="optimizationConfig.aggregation_threshold"
+              type="number"
+              min="3"
+              max="20"
+              class="w-full input-field"
+              placeholder="5"
+            />
+            <div class="text-xs text-gray-500 mt-1">达到此数量的相似活动将被聚合</div>
+          </div>
+          
+          <!-- 数据保留天数 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-2">数据保留天数</label>
+            <input 
+              v-model.number="optimizationConfig.cleanup_retention_days"
+              type="number"
+              min="1"
+              max="30"
+              class="w-full input-field"
+              placeholder="7"
+            />
+            <div class="text-xs text-gray-500 mt-1">超过此天数的活动数据将被清理</div>
+          </div>
+          
+          <!-- 开关配置 -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-gray-300">启用聚合</span>
+              <button 
+                @click="optimizationConfig.enable_aggregation = !optimizationConfig.enable_aggregation"
+                :class="['w-12 h-6 rounded-full transition-colors', optimizationConfig.enable_aggregation ? 'bg-primary-500' : 'bg-gray-600']"
+              >
+                <div :class="['w-5 h-5 bg-white rounded-full transition-transform', optimizationConfig.enable_aggregation ? 'translate-x-6' : 'translate-x-1']"></div>
+              </button>
+            </div>
+            
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-gray-300">启用噪音过滤</span>
+              <button 
+                @click="optimizationConfig.noise_filter_enabled = !optimizationConfig.noise_filter_enabled"
+                :class="['w-12 h-6 rounded-full transition-colors', optimizationConfig.noise_filter_enabled ? 'bg-primary-500' : 'bg-gray-600']"
+              >
+                <div :class="['w-5 h-5 bg-white rounded-full transition-transform', optimizationConfig.noise_filter_enabled ? 'translate-x-6' : 'translate-x-1']"></div>
+              </button>
+            </div>
+            
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-gray-300">自动清理</span>
+              <button 
+                @click="optimizationConfig.auto_cleanup_enabled = !optimizationConfig.auto_cleanup_enabled"
+                :class="['w-12 h-6 rounded-full transition-colors', optimizationConfig.auto_cleanup_enabled ? 'bg-primary-500' : 'bg-gray-600']"
+              >
+                <div :class="['w-5 h-5 bg-white rounded-full transition-transform', optimizationConfig.auto_cleanup_enabled ? 'translate-x-6' : 'translate-x-1']"></div>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex space-x-3 mt-6">
+          <button 
+            @click="saveOptimizationConfig"
+            :disabled="loadingOptimization"
+            class="flex-1 btn-primary"
+          >
+            <Save :class="['w-4 h-4 mr-2', { 'animate-spin': loadingOptimization }]" />
+            {{ loadingOptimization ? '保存中...' : '保存配置' }}
+          </button>
+          <button 
+            @click="closeOptimizationConfig"
+            class="flex-1 btn-secondary"
+          >
+            取消
+          </button>
         </div>
       </div>
     </div>
@@ -484,9 +660,13 @@ import {
   Cpu,
   Layers,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Settings,
+  Zap,
+  X,
+  Save
 } from 'lucide-vue-next'
-import { useAnalysis, useClusters } from '../composables/api'
+import { useAnalysis, useClusters, useActivityOptimization } from '../composables/api'
 import {
   formatCpuValue,
   formatMemoryValue,
@@ -515,6 +695,19 @@ const {
 } = useAnalysis()
 
 const { clusters, fetchClusters } = useClusters()
+
+// 活动优化相关
+const {
+  config: optimizationConfig,
+  optimizationResult,
+  loading: loadingOptimization,
+  error: optimizationError,
+  fetchOptimizationConfig,
+  updateOptimizationConfig,
+  executeOptimization: performOptimization
+} = useActivityOptimization()
+
+const showOptimizationConfig = ref(false)
 
 const sortBy = ref('total_waste')
 const selectedCluster = ref('')
@@ -571,6 +764,57 @@ const sortedProblems = computed(() => {
   return analysisData.value?.top50_problems || []
 })
 
+// 活动优化相关方法
+const toggleOptimizationConfig = async () => {
+  if (!showOptimizationConfig.value) {
+    try {
+      await fetchOptimizationConfig()
+      showOptimizationConfig.value = true
+    } catch (error) {
+      console.error('获取优化配置失败:', error)
+    }
+  } else {
+    showOptimizationConfig.value = false
+  }
+}
+
+const closeOptimizationConfig = () => {
+  showOptimizationConfig.value = false
+}
+
+const saveOptimizationConfig = async () => {
+  try {
+    await updateOptimizationConfig(optimizationConfig.value)
+    showOptimizationConfig.value = false
+    // 可以显示成功提示
+  } catch (error) {
+    console.error('保存配置失败:', error)
+    // 可以显示错误提示
+  }
+}
+
+const executeOptimization = async () => {
+  try {
+    await performOptimization()
+    // 可以显示成功提示
+  } catch (error) {
+    console.error('执行优化失败:', error)
+    // 可以显示错误提示
+  }
+}
+
+const formatOptimizationTime = (timestamp: string) => {
+  if (!timestamp) return '未知'
+  const date = new Date(timestamp)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+  const minutes = Math.floor(diff / (1000 * 60))
+  
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes}分钟前`
+  if (minutes < 1440) return `${Math.floor(minutes / 60)}小时前`
+  return `${Math.floor(minutes / 1440)}天前`
+}
 
 const refreshAllAnalysisData = async () => {
   await Promise.allSettled([
@@ -626,7 +870,8 @@ onMounted(async () => {
     fetchTopMemoryPods(20),
     fetchTopCpuPods(20),
     fetchNamespaceSummary(),
-    fetchAnalysis()
+    fetchAnalysis(),
+    fetchOptimizationConfig() // 加载优化配置
   ])
 })
 </script>

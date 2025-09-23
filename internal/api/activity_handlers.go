@@ -184,3 +184,75 @@ func CleanupOldActivitiesAndAlerts(activityService *service.ActivityService) gin
 		response.OkWithMessage("旧数据清理完成", c)
 	}
 }
+
+// GetOptimizationConfig 获取活动优化配置 - 获取当前的活动优化配置参数
+func GetOptimizationConfig(activityService *service.ActivityService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		config, err := activityService.GetOptimizationConfig()
+		if err != nil {
+			logger.Error("获取优化配置失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+
+		response.OkWithData(config, c)
+	}
+}
+
+// UpdateOptimizationConfig 更新活动优化配置 - 更新活动优化的配置参数
+func UpdateOptimizationConfig(activityService *service.ActivityService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 解析请求体
+		var config service.OptimizationConfig
+		if err := c.ShouldBindJSON(&config); err != nil {
+			response.BadRequest("请求参数错误: "+err.Error(), c)
+			return
+		}
+
+		// 更新配置
+		err := activityService.UpdateOptimizationConfig(&config)
+		if err != nil {
+			logger.Error("更新优化配置失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+
+		response.OkWithData(config, c)
+	}
+}
+
+// ExecuteOptimization 执行活动优化 - 手动触发活动数据的优化处理
+func ExecuteOptimization(activityService *service.ActivityService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 执行优化
+		result, err := activityService.OptimizeActivities()
+		if err != nil {
+			logger.Error("执行活动优化失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+
+		response.OkWithData(result, c)
+	}
+}
+
+// GetActivityStats 获取活动统计信息 - 获取指定时间范围内的活动统计数据
+func GetActivityStats(activityService *service.ActivityService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		hoursStr := c.DefaultQuery("hours", "24")
+		hours, err := strconv.Atoi(hoursStr)
+		if err != nil {
+			hours = 24
+		}
+
+		// 获取真实的活动统计数据
+		stats, err := activityService.GetActivityStats(hours)
+		if err != nil {
+			logger.Error("获取活动统计失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+
+		response.OkWithData(stats, c)
+	}
+}

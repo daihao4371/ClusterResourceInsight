@@ -618,3 +618,88 @@ export function useRefresh() {
     refresh
   }
 }
+
+/**
+ * 活动优化配置管理
+ */
+export function useActivityOptimization() {
+  const config = ref(null)
+  const optimizationResult = ref(null)
+  const loading = ref(false)
+  const error = ref<string | null>(null)
+
+  // 获取优化配置
+  const fetchOptimizationConfig = async () => {
+    try {
+      loading.value = true
+      error.value = null
+      const response = await api.get<ApiResponse<any>>('/activities/optimization/config')
+      config.value = response.data.data
+      return response.data.data
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '获取优化配置失败'
+      console.error('获取优化配置失败:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 更新优化配置
+  const updateOptimizationConfig = async (newConfig: any) => {
+    try {
+      loading.value = true
+      error.value = null
+      const response = await api.put<ApiResponse<any>>('/activities/optimization/config', newConfig)
+      config.value = response.data.data
+      return response.data.data
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '更新优化配置失败'
+      console.error('更新优化配置失败:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 执行活动优化
+  const executeOptimization = async () => {
+    try {
+      loading.value = true
+      error.value = null
+      const response = await api.post<ApiResponse<any>>('/activities/optimization/execute')
+      optimizationResult.value = response.data.data
+      return response.data.data
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '执行优化失败'
+      console.error('执行优化失败:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 获取活动统计
+  const getActivityStats = async (hours: number = 24) => {
+    try {
+      const response = await api.get<ApiResponse<any>>('/activities/stats', {
+        params: { hours }
+      })
+      return response.data.data
+    } catch (err) {
+      console.error('获取活动统计失败:', err)
+      throw err
+    }
+  }
+
+  return {
+    config: computed(() => config.value),
+    optimizationResult: computed(() => optimizationResult.value),
+    loading: computed(() => loading.value),
+    error: computed(() => error.value),
+    fetchOptimizationConfig,
+    updateOptimizationConfig,
+    executeOptimization,
+    getActivityStats
+  }
+}

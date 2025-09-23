@@ -80,6 +80,17 @@ func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollec
 	{
 		activitiesGroup.GET("/recent", api.GetRecentActivities(activityService))
 		activitiesGroup.DELETE("/cleanup", api.CleanupOldActivitiesAndAlerts(activityService))
+		
+		// 活动优化相关接口
+		optimizationGroup := activitiesGroup.Group("/optimization")
+		{
+			optimizationGroup.GET("/config", api.GetOptimizationConfig(activityService))
+			optimizationGroup.PUT("/config", api.UpdateOptimizationConfig(activityService))
+			optimizationGroup.POST("/execute", api.ExecuteOptimization(activityService))
+		}
+		
+		// 活动统计接口
+		activitiesGroup.GET("/stats", api.GetActivityStats(activityService))
 	}
 
 	alertsGroup := r.Group("/alerts")
