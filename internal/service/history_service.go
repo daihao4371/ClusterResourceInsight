@@ -324,38 +324,11 @@ func (hs *HistoryService) GetSystemTrendData(hours int) ([]SystemTrendData, erro
 		})
 	}
 	
-	// 如果没有历史数据，返回模拟数据确保图表正常显示
+	// 如果没有历史数据，返回空数组
 	if len(trendData) == 0 {
-		return hs.generateMockTrendData(hours), nil
+		return []SystemTrendData{}, nil
 	}
 	
 	return trendData, nil
 }
 
-// generateMockTrendData 生成模拟趋势数据 - 当没有历史数据时使用
-func (hs *HistoryService) generateMockTrendData(hours int) []SystemTrendData {
-	now := time.Now()
-	var data []SystemTrendData
-	
-	// 根据时间范围生成不同数量的数据点
-	pointCount := 6
-	if hours <= 1 {
-		pointCount = 12
-	} else if hours <= 6 {
-		pointCount = 8
-	}
-	
-	interval := time.Duration(hours) * time.Hour / time.Duration(pointCount)
-	
-	for i := 0; i < pointCount; i++ {
-		t := now.Add(-time.Duration(hours)*time.Hour + interval*time.Duration(i))
-		data = append(data, SystemTrendData{
-			Time:        t.Format("15:04"),
-			CPUUsage:    45.0 + float64(i%3)*10.0, // 模拟CPU使用率波动
-			MemoryUsage: 60.0 + float64(i%4)*8.0,  // 模拟内存使用率波动
-			PodCount:    120 + i*5,                // 模拟Pod数量增长
-		})
-	}
-	
-	return data
-}
