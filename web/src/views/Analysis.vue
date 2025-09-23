@@ -23,41 +23,9 @@
           <Database class="w-4 h-4 mr-2" />
           深度收集
         </button>
-        <button class="btn-secondary">
-          <Download class="w-4 h-4 mr-2" />
-          导出报告
-        </button>
       </div>
     </div>
 
-    <!-- 分析概览 -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-      <MetricCard
-        title="总Pod数量"
-        :value="analysisData?.total_pods || 0"
-        icon="Box"
-        status="info"
-      />
-      <MetricCard
-        title="异常配置Pod"
-        :value="analysisData?.unreasonable_pods || 0"
-        icon="AlertTriangle"
-        status="warning"
-      />
-      <MetricCard
-        title="资源利用率"
-        :value="resourceUtilization"
-        unit="%"
-        icon="Activity"
-        :status="resourceUtilization > 70 ? 'success' : 'warning'"
-      />
-      <MetricCard
-        title="分析集群数"
-        :value="analysisData?.clusters_analyzed || 0"
-        icon="Server"
-        status="info"
-      />
-    </div>
 
 
     <!-- 深度分析功能区 -->
@@ -84,7 +52,7 @@
           </div>
           <div v-else class="space-y-3">
             <div 
-              v-for="(pod, index) in (Array.isArray(topMemoryPods) ? topMemoryPods.slice(0, 10) : [])"
+              v-for="pod in (Array.isArray(topMemoryPods) ? topMemoryPods.slice(0, 10) : [])"
               :key="`memory-${pod.cluster_name}-${pod.namespace}-${pod.pod_name}`"
               class="flex items-center justify-between p-3 bg-dark-800/30 rounded-lg"
             >
@@ -123,7 +91,7 @@
           </div>
           <div v-else class="space-y-3">
             <div 
-              v-for="(pod, index) in (Array.isArray(topCpuPods) ? topCpuPods.slice(0, 10) : [])"
+              v-for="pod in (Array.isArray(topCpuPods) ? topCpuPods.slice(0, 10) : [])"
               :key="`cpu-${pod.cluster_name}-${pod.namespace}-${pod.pod_name}`"
               class="flex items-center justify-between p-3 bg-dark-800/30 rounded-lg"
             >
@@ -173,11 +141,11 @@
               <div class="grid grid-cols-2 gap-2 text-xs">
                 <div>
                   <span class="text-gray-400">Pod数:</span>
-                  <span class="ml-1 text-white">{{ ns.total_pods }}</span>
+                  <span class="ml-1 text-white">{{ ns.pod_count }}</span>
                 </div>
                 <div>
-                  <span class="text-gray-400">问题数:</span>
-                  <span class="ml-1 text-warning-400">{{ ns.unreasonable_pods }}</span>
+                  <span class="text-gray-400">运行中:</span>
+                  <span class="ml-1 text-success-400">{{ ns.running_pods }}</span>
                 </div>
               </div>
             </div>
@@ -507,22 +475,17 @@
 import { ref, computed, onMounted } from 'vue'
 import { 
   RefreshCw, 
-  Download, 
   Filter, 
   Lightbulb,
   BarChart3, 
   PieChart,
-  Box,
   AlertTriangle,
-  Activity,
   Database,
-  Server,
   Cpu,
   Layers,
   ChevronLeft,
   ChevronRight
 } from 'lucide-vue-next'
-import MetricCard from '../components/common/MetricCard.vue'
 import { useAnalysis, useClusters } from '../composables/api'
 import {
   formatCpuValue,
@@ -541,7 +504,6 @@ const {
   topCpuPods,
   namespaceSummary,
   pagination,
-  filters,
   loading, 
   fetchAnalysis,
   fetchProblemsWithPagination,
@@ -604,13 +566,6 @@ const visiblePages = computed(() => {
   return pages.filter(p => p !== -1) // 暂时过滤掉省略号
 })
 
-// 计算资源利用率
-const resourceUtilization = computed(() => {
-  if (!analysisData.value) return 0
-  const total = analysisData.value.total_pods
-  const problems = analysisData.value.unreasonable_pods
-  return total > 0 ? Math.round(((total - problems) / total) * 100) : 0
-})
 
 const sortedProblems = computed(() => {
   return analysisData.value?.top50_problems || []
@@ -633,7 +588,7 @@ const refreshProblems = async () => {
     sortBy.value
   )
   
-  if (!analysisData.value || analysisData.value.total_pods === 0) {
+  if (!analysisData.value) {
     await fetchAnalysis().catch(() => {})
   }
 }
