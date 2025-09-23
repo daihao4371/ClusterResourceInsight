@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-4 animate-fade-in">
-    <!-- 页面标题 -->
+    <!-- 页面标题和集群选择器 -->
     <div class="flex items-center justify-between">
       <div>
         <h1 class="text-2xl font-bold text-gradient">系统总览</h1>
@@ -8,6 +8,14 @@
       </div>
       
       <div class="flex items-center space-x-4">
+        <!-- 集群选择器 -->
+        <ClusterSelector
+          v-model="selectedCluster"
+          @cluster-change="handleClusterChange"
+          @refresh="handleClusterRefresh"
+          class="mr-4"
+        />
+        
         <div class="text-sm text-gray-400">
           <span class="inline-block w-2 h-2 bg-success-500 rounded-full animate-pulse mr-2"></span>
           实时监控中
@@ -221,9 +229,70 @@ import ClusterStatusChart from '../components/charts/ClusterStatusChart.vue'
 import ResourceTrendChart from '../components/charts/ResourceTrendChart.vue'
 import RealtimeActivity from '../components/common/RealtimeActivity.vue'
 import SystemAlerts from '../components/common/SystemAlerts.vue'
+import ClusterSelector from '../components/common/ClusterSelector.vue'
 
 const systemStore = useSystemStore()
 const router = useRouter()
+
+// 集群选择相关状态
+const selectedCluster = ref('')
+
+// 集群选择处理器 - 优化版本，参考Pod监控页面的实现
+const handleClusterChange = async (clusterId: string, clusterInfo: any) => {
+  console.log('Dashboard收到集群切换事件:', {
+    传入集群ID: clusterId,
+    集群信息: clusterInfo,
+    是否为全部集群: !clusterId || clusterId === ''
+  })
+  
+  // 更新当前选中的集群 - 保持与ClusterSelector组件的状态同步
+  if (selectedCluster.value !== clusterId) {
+    selectedCluster.value = clusterId || ''
+  }
+  
+  // 更新系统store中的当前集群
+  systemStore.setCurrentCluster(clusterId || '')
+  
+  // 重新加载数据 - 传递正确的集群参数格式
+  await refreshDataForCluster(clusterId || '')
+  
+  console.log('集群数据刷新完成，当前集群:', clusterId || '全部集群')
+}
+
+// 集群刷新处理器
+const handleClusterRefresh = () => {
+  console.log('刷新集群列表')
+  // 可以触发系统数据的重新加载
+  refreshAllData()
+}
+
+// 为特定集群刷新数据
+const refreshDataForCluster = async (clusterId: string) => {
+  try {
+    console.log('开始刷新集群数据:', { clusterId })
+    
+    // 处理集群ID参数 - 确保传递正确的数字格式的集群ID
+    const clusterParam = clusterId && clusterId !== '' ? clusterId : undefined
+    
+    // 如果传入的是集群名称，需要转换为集群ID（针对API要求）
+    // 但先尝试直接使用，因为ClusterSelector现在应该返回集群ID
+    
+    // 刷新统计数据
+    await systemStore.fetchStats(clusterParam)
+    
+    // 刷新趋势数据
+    const hours = parseInt(selectedTimeRange.value)
+    await systemStore.fetchTrendData(hours, clusterParam)
+    
+    // 刷新实时活动和告警（这些通常是全局的，但可以根据需要筛选）
+    await systemStore.fetchRealtimeActivities()
+    await systemStore.fetchSystemAlerts()
+    
+    console.log(`集群 ${clusterId || '全部'} 数据刷新完成`)
+  } catch (error) {
+    console.error('刷新集群数据失败:', error)
+  }
+}
 
 // 计算属性
 const clusterStatus = computed(() => {
@@ -306,7 +375,9 @@ const chartDataForTrend = computed(() => {
 // 时间范围改变处理
 const onTimeRangeChange = () => {
   const hours = parseInt(selectedTimeRange.value)
-  systemStore.fetchTrendData(hours)
+  // 处理集群ID参数 - 确保传递正确的参数格式
+  const clusterParam = selectedCluster.value && selectedCluster.value !== '' ? selectedCluster.value : undefined
+  systemStore.fetchTrendData(hours, clusterParam)
 }
 
 // 处理解决告警
@@ -366,7 +437,9 @@ const initializeSampleData = async () => {
 const refreshAllData = async () => {
   refreshingData.value = true
   try {
-    await systemStore.refreshAllData()
+    // 处理集群ID参数 - 确保传递正确的参数格式
+    const clusterParam = selectedCluster.value && selectedCluster.value !== '' ? selectedCluster.value : undefined
+    await systemStore.refreshAllData(clusterParam)
     console.log('数据刷新成功')
   } catch (error) {
     console.error('数据刷新失败:', error)
@@ -376,12 +449,21 @@ const refreshAllData = async () => {
 }
 
 onMounted(() => {
-  // 初始化数据
-  systemStore.fetchStats()
+  console.log('Dashboard组件初始化，当前选中集群:', selectedCluster.value)
+  
+  // 初始化数据 - 如果没有选中集群，加载全部集群数据
+  const clusterParam = selectedCluster.value && selectedCluster.value !== '' ? selectedCluster.value : undefined
+  
+  // 显式加载统计数据
+  systemStore.fetchStats(clusterParam)
+  
   // 初始化趋势数据 - 默认24小时
-  systemStore.fetchTrendData(24)
+  systemStore.fetchTrendData(24, clusterParam)
+  
   // 初始化实时活动和告警数据
   systemStore.fetchRealtimeActivities()
   systemStore.fetchSystemAlerts()
+  
+  console.log('Dashboard数据初始化完成，集群参数:', clusterParam)
 })
 </script>

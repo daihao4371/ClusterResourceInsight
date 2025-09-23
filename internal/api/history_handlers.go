@@ -137,10 +137,11 @@ func CleanupOldData(historyService *service.HistoryService) gin.HandlerFunc {
 	}
 }
 
-// GetSystemTrendData 获取系统级趋势数据 - 为Dashboard提供聚合的趋势图表数据
+// GetSystemTrendData 获取系统级趋势数据 - 为Dashboard提供聚合的趋势图表数据，支持集群筛选
 func GetSystemTrendData(historyService *service.HistoryService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		hoursStr := c.DefaultQuery("hours", "24")
+		clusterIDStr := c.Query("cluster_id")
 
 		hours, err := strconv.Atoi(hoursStr)
 		if err != nil || hours <= 0 {
@@ -152,19 +153,29 @@ func GetSystemTrendData(historyService *service.HistoryService) gin.HandlerFunc 
 			hours = 168
 		}
 
-		data, err := historyService.GetSystemTrendData(hours)
+		// 解析集群ID参数
+		var clusterID *uint
+		if clusterIDStr != "" {
+			if id, err := strconv.ParseUint(clusterIDStr, 10, 32); err == nil {
+				clusterIDValue := uint(id)
+				clusterID = &clusterIDValue
+			}
+		}
+
+		data, err := historyService.GetSystemTrendDataWithCluster(hours, clusterID)
 		if err != nil {
 			logger.Error("获取系统趋势数据失败: %v", err)
 			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		logger.Info("系统趋势数据获取完成: hours=%d, data_points=%d", hours, len(data))
+		logger.Info("系统趋势数据获取完成: hours=%d, cluster_id=%v, data_points=%d", hours, clusterID, len(data))
 
 		response.OkWithData(gin.H{
-			"data":  data,
-			"hours": hours,
-			"count": len(data),
+			"data":       data,
+			"hours":      hours,
+			"cluster_id": clusterID,
+			"count":      len(data),
 		}, c)
 	}
 }

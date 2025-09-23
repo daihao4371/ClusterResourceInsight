@@ -562,3 +562,87 @@ func (mc *MultiClusterResourceCollector) GetPodTrendData(ctx context.Context, cl
 	logger.Info("Pod趋势数据获取完成: %s/%s/%s", clusterName, namespace, podName)
 	return trendData, nil
 }
+
+// CollectSpecificClusterData 收集特定集群的数据 - 为Dashboard的集群筛选功能提供支持
+// 参数:
+//   - ctx: 上下文对象，用于控制请求生命周期和超时
+//   - clusterID: 目标集群的ID
+//
+// 返回:
+//   - *AnalysisResult: 指定集群的分析结果
+//   - error: 收集过程中的错误信息
+func (mc *MultiClusterResourceCollector) CollectSpecificClusterData(ctx context.Context, clusterID uint) (*AnalysisResult, error) {
+	logger.Info("开始收集特定集群数据，集群ID: %d", clusterID)
+
+	// 获取指定集群配置
+	cluster, err := mc.clusterService.GetClusterByID(clusterID)
+	if err != nil {
+		return nil, fmt.Errorf("获取集群配置失败: %v", err)
+	}
+
+	if cluster.Status != "online" {
+		logger.Warn("集群 %s 状态为离线，无法收集数据", cluster.ClusterName)
+		return &AnalysisResult{
+			TotalPods:        0,
+			UnreasonablePods: 0,
+			Top50Problems:    []PodResourceInfo{},
+			GeneratedAt:      time.Now(),
+			ClustersAnalyzed: 0,
+		}, nil
+	}
+
+	// 创建Kubernetes客户端
+	kubeClient, metricsClient, err := mc.clusterService.CreateKubernetesClient(cluster)
+	if err != nil {
+		logger.Error("创建集群 %s 的客户端失败: %v", cluster.ClusterName, err)
+		// 记录集群连接失败活动
+		if mc.activityService != nil {
+			mc.activityService.RecordClusterConnection(cluster.ID, cluster.ClusterName, false, fmt.Sprintf("客户端创建失败: %v", err))
+		}
+		return nil, fmt.Errorf("创建集群客户端失败: %v", err)
+	}
+
+	// 记录集群连接成功活动
+	if mc.activityService != nil {
+		mc.activityService.RecordClusterConnection(cluster.ID, cluster.ClusterName, true, "集群客户端创建成功")
+	}
+
+	// 创建单集群收集器
+	singleCollector := &ResourceCollector{
+		kubeClient:    kubeClient,
+		metricsClient: metricsClient,
+	}
+
+	// 为单个集群设置超时时间
+	clusterCtx, cancel := context.WithTimeout(ctx, 300*time.Second) // 5分钟超时
+	defer cancel()
+
+	// 收集该集群的数据
+	clusterResult, err := singleCollector.collectSingleClusterData(clusterCtx, cluster.ClusterName)
+	if err != nil {
+		logger.Error("收集集群 %s 数据失败: %v", cluster.ClusterName, err)
+		// 记录数据收集失败活动
+		if mc.activityService != nil {
+			mc.activityService.RecordDataCollection(cluster.ID, cluster.ClusterName, 0, false)
+		}
+		return nil, fmt.Errorf("收集集群数据失败: %v", err)
+	}
+
+	// 记录数据收集成功活动
+	if mc.activityService != nil {
+		mc.activityService.RecordDataCollection(cluster.ID, cluster.ClusterName, len(clusterResult.Top50Problems), true)
+	}
+
+	// 为每个 Pod 添加集群名称标识
+	for i := range clusterResult.Top50Problems {
+		clusterResult.Top50Problems[i].ClusterName = cluster.ClusterName
+	}
+
+	// 更新聚合结果，设置正确的集群分析数量
+	clusterResult.ClustersAnalyzed = 1
+
+	logger.Info("特定集群数据收集完成: 集群=%s, pods=%d, problems=%d", 
+		cluster.ClusterName, clusterResult.TotalPods, clusterResult.UnreasonablePods)
+
+	return clusterResult, nil
+}

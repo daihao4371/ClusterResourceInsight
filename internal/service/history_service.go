@@ -332,3 +332,97 @@ func (hs *HistoryService) GetSystemTrendData(hours int) ([]SystemTrendData, erro
 	return trendData, nil
 }
 
+// GetSystemTrendDataWithCluster 获取系统级聚合趋势数据，支持集群筛选 - 为Dashboard提供图表数据
+// 聚合指定集群或所有集群的CPU、内存使用率平均值和Pod总数按时间分组
+// 参数:
+//   - hours: 时间范围（小时）
+//   - clusterID: 集群ID，为nil时查询所有集群
+// 返回:
+//   - []SystemTrendData: 系统趋势数据数组
+//   - error: 查询过程中的错误
+func (hs *HistoryService) GetSystemTrendDataWithCluster(hours int, clusterID *uint) ([]SystemTrendData, error) {
+	startTime := time.Now().Add(-time.Duration(hours) * time.Hour)
+	
+	// 计算时间分组间隔 - 根据时间范围动态调整
+	var intervalMinutes int
+	switch {
+	case hours <= 1:
+		intervalMinutes = 5  // 1小时内，5分钟一个点
+	case hours <= 6:
+		intervalMinutes = 15 // 6小时内，15分钟一个点
+	case hours <= 24:
+		intervalMinutes = 60 // 24小时内，1小时一个点
+	default:
+		intervalMinutes = 240 // 7天内，4小时一个点
+	}
+	
+	// 构建SQL查询 - 按时间区间分组聚合数据，支持集群筛选
+	var query string
+	var queryParams []interface{}
+	
+	if clusterID != nil {
+		// 筛选特定集群的数据
+		query = `
+			SELECT 
+				DATE_FORMAT(MIN(collected_at), '%H:%i') as time_label,
+				AVG(cpu_req_pct) as avg_cpu_usage,
+				AVG(memory_req_pct) as avg_memory_usage,
+				COUNT(DISTINCT pod_name) as pod_count,
+				MIN(collected_at) as collected_at
+			FROM pod_metrics_history 
+			WHERE collected_at >= ? AND cluster_id = ?
+			GROUP BY 
+				FLOOR(UNIX_TIMESTAMP(collected_at) / (? * 60))
+			ORDER BY collected_at ASC
+		`
+		queryParams = []interface{}{startTime, *clusterID, intervalMinutes}
+	} else {
+		// 聚合所有集群的数据
+		query = `
+			SELECT 
+				DATE_FORMAT(MIN(collected_at), '%H:%i') as time_label,
+				AVG(cpu_req_pct) as avg_cpu_usage,
+				AVG(memory_req_pct) as avg_memory_usage,
+				COUNT(DISTINCT pod_name) as pod_count,
+				MIN(collected_at) as collected_at
+			FROM pod_metrics_history 
+			WHERE collected_at >= ? 
+			GROUP BY 
+				FLOOR(UNIX_TIMESTAMP(collected_at) / (? * 60))
+			ORDER BY collected_at ASC
+		`
+		queryParams = []interface{}{startTime, intervalMinutes}
+	}
+	
+	type QueryResult struct {
+		TimeLabel      string    `json:"time_label"`
+		AvgCPUUsage    float64   `json:"avg_cpu_usage"`
+		AvgMemoryUsage float64   `json:"avg_memory_usage"`
+		PodCount       int       `json:"pod_count"`
+		CollectedAt    time.Time `json:"collected_at"`
+	}
+	
+	var results []QueryResult
+	if err := hs.db.Raw(query, queryParams...).Scan(&results).Error; err != nil {
+		return nil, fmt.Errorf("查询系统趋势数据失败: %v", err)
+	}
+	
+	// 转换为前端期望的格式
+	var trendData []SystemTrendData
+	for _, result := range results {
+		trendData = append(trendData, SystemTrendData{
+			Time:        result.TimeLabel,
+			CPUUsage:    result.AvgCPUUsage,
+			MemoryUsage: result.AvgMemoryUsage,
+			PodCount:    result.PodCount,
+		})
+	}
+	
+	// 如果没有历史数据，返回空数组
+	if len(trendData) == 0 {
+		return []SystemTrendData{}, nil
+	}
+	
+	return trendData, nil
+}
+
