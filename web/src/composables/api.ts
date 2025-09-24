@@ -60,7 +60,7 @@ export function useClusters() {
     try {
       loading.value = true
       const response = await api.put<ApiResponse<Cluster>>(`/clusters/${id}`, clusterData)
-      const index = clusters.value.findIndex(c => c.id === id)
+      const index = clusters.value.findIndex(c => Number(c.id) === id)
       if (index !== -1) {
         clusters.value[index] = response.data.data
       }
@@ -77,7 +77,7 @@ export function useClusters() {
     try {
       loading.value = true
       await api.delete(`/clusters/${id}`)
-      clusters.value = clusters.value.filter(c => c.id !== id)
+      clusters.value = clusters.value.filter(c => Number(c.id) !== id)
     } catch (err) {
       error.value = err instanceof Error ? err.message : '删除集群失败'
       throw err
@@ -157,7 +157,7 @@ export function usePods() {
  * 历史数据获取
  */
 export function useHistory() {
-  const history = ref([])
+  const history = ref<any[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
   const total = ref(0)
@@ -225,10 +225,10 @@ export function useAnalysis() {
       const response = await api.get<ApiResponse<any>>('/analysis', { params })
       
       // 处理新的分页响应格式
-      if (response.data.data && response.data.pagination) {
+      if (response.data.data && (response.data as any).pagination) {
         analysis.value = response.data.data
-        pagination.value = response.data.pagination
-        filters.value.cluster_name = response.data.filter?.cluster_name || ''
+        pagination.value = (response.data as any).pagination
+        filters.value.cluster_name = (response.data as any).filter?.cluster_name || ''
       } else {
         // 兼容旧格式
         analysis.value = response.data.data || response.data
@@ -520,7 +520,7 @@ export function useStats() {
  * 调度任务数据获取
  */
 export function useSchedule() {
-  const jobs = ref([])
+  const jobs = ref<any[]>([])
   const settings = ref(null)
   const loading = ref(false)
   const error = ref<string | null>(null)

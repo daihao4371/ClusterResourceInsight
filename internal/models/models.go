@@ -90,6 +90,14 @@ type AlertHistory struct {
 	Title       string    `gorm:"size:255" json:"title"`                         // 告警标题
 	Message     string    `gorm:"type:text" json:"message"`                      // 告警消息
 	Status      string    `gorm:"size:20;default:'active'" json:"status"`        // 状态：active/resolved/suppressed
+	
+	// 降噪优化字段
+	AlertFingerprint string    `gorm:"size:64;index" json:"alert_fingerprint"`       // 告警指纹，用于去重
+	Count           int       `gorm:"default:1" json:"count"`                       // 相同告警发生次数
+	FirstOccurredAt time.Time `gorm:"index" json:"first_occurred_at"`               // 首次发生时间
+	LastOccurredAt  time.Time `gorm:"index" json:"last_occurred_at"`                // 最后发生时间
+	SuppressedUntil *time.Time `json:"suppressed_until"`                           // 抑制到指定时间
+	
 	TriggeredAt time.Time `gorm:"index" json:"triggered_at"`                     // 触发时间
 	ResolvedAt  *time.Time `json:"resolved_at"`                                  // 解决时间
 	CreatedAt   time.Time `json:"created_at"`

@@ -9,21 +9,24 @@ import (
 	"cluster-resource-insight/internal/database"
 	"cluster-resource-insight/internal/logger"
 	"cluster-resource-insight/internal/models"
+	"cluster-resource-insight/pkg/deduplication"
 
 	"gorm.io/gorm"
 )
 
 // ActivityService 活动服务管理器
 type ActivityService struct {
-	db        *gorm.DB
-	optimizer *ActivityOptimizer
+	db            *gorm.DB
+	optimizer     *ActivityOptimizer
+	deduplicator  *deduplication.AlertDeduplicator // 告警降噪器
 }
 
 // NewActivityService 创建活动服务实例
 func NewActivityService() *ActivityService {
 	return &ActivityService{
-		db:        database.GetDB(),
-		optimizer: NewActivityOptimizer(),
+		db:           database.GetDB(),
+		optimizer:    NewActivityOptimizer(),
+		deduplicator: deduplication.NewAlertDeduplicator(),
 	}
 }
 
@@ -697,29 +700,57 @@ func (s *ActivityService) CreateAlert(clusterID uint, level, title, message, sta
 		status = "active" // 默认状态
 	}
 
-	alert := &models.AlertHistory{
-		RuleID:      nil, // 系统生成的告警
-		ClusterID:   clusterID,
-		AlertLevel:  level,
-		Title:       title,
-		Message:     message,
-		Status:      status,
-		TriggeredAt: time.Now(),
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+	// 使用降噪器检查是否应该创建告警
+	shouldCreate, existingAlertID, count := s.deduplicator.ShouldCreateAlert(clusterID, level, title)
+	
+	if !shouldCreate {
+		// 在抑制期内，更新现有告警的计数
+		if existingAlertID > 0 {
+			err := s.db.Model(&models.AlertHistory{}).
+				Where("id = ?", existingAlertID).
+				Updates(map[string]interface{}{
+					"count":            count,
+					"last_occurred_at": time.Now(),
+					"updated_at":       time.Now(),
+				}).Error
+			if err != nil {
+				logger.Error("更新告警计数失败: %v", err)
+			} else {
+				logger.Info("告警被抑制，更新计数: level=%s, title=%s, count=%d", level, title, count)
+			}
+		}
+		return nil // 不创建新告警
 	}
+
+	// 创建新的降噪告警
+	alert := s.deduplicator.PrepareDeduplicatedAlert(clusterID, level, title, message)
+	alert.Status = status
+	alert.Count = count
 
 	if err := s.db.Create(alert).Error; err != nil {
-		return fmt.Errorf("创建系统告警失败: %w", err)
+		return fmt.Errorf("创建降噪告警失败: %w", err)
 	}
 
-	logger.Info("创建系统告警: level=%s, title=%s, cluster_id=%d", level, title, clusterID)
+	// 更新降噪器中的告警ID
+	s.deduplicator.UpdateAlertID(clusterID, level, title, alert.ID)
+
+	logger.Info("创建降噪告警: level=%s, title=%s, cluster_id=%d, count=%d", level, title, clusterID, count)
 	return nil
 }
 
 // OptimizeActivities 执行活动优化
 func (s *ActivityService) OptimizeActivities() (*OptimizationResult, error) {
 	return s.optimizer.OptimizeActivities()
+}
+
+// GetDeduplicationStats 获取告警降噪统计信息
+func (s *ActivityService) GetDeduplicationStats() map[string]interface{} {
+	return s.deduplicator.GetCacheStats()
+}
+
+// SetSuppressionDuration 设置告警抑制时间
+func (s *ActivityService) SetSuppressionDuration(duration time.Duration) {
+	s.deduplicator.SetSuppressionDuration(duration)
 }
 
 // GetOptimizationConfig 获取优化配置
