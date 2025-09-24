@@ -426,3 +426,51 @@ func (hs *HistoryService) GetSystemTrendDataWithCluster(hours int, clusterID *ui
 	return trendData, nil
 }
 
+
+
+// GetLatestPodMetrics 获取最新的Pod指标数据 - 按Pod聚合获取最近时间范围内每个Pod的最新记录
+// 参数:
+//   - clusterID: 集群ID
+//   - namespace: 命名空间筛选条件，为空时查询所有命名空间
+//   - duration: 时间范围，查询这个时间段内的最新数据
+//
+// 返回:
+//   - []models.PodMetricsHistory: 最新的Pod指标数据列表
+//   - error: 查询过程中的错误信息
+func (hs *HistoryService) GetLatestPodMetrics(clusterID uint, namespace string, duration time.Duration) ([]models.PodMetricsHistory, error) {
+	startTime := time.Now().Add(-duration)
+	
+	// 使用更简单的查询方式：直接获取指定时间范围内的最新记录
+	// 按Pod分组并获取每组的最新记录
+	query := hs.db.Model(&models.PodMetricsHistory{}).
+		Where("collected_at >= ? AND cluster_id = ?", startTime, clusterID)
+	
+	// 添加命名空间筛选条件
+	if namespace != "" {
+		query = query.Where("namespace = ?", namespace)
+	}
+	
+	// 获取所有符合条件的记录，然后在应用层去重
+	var allPods []models.PodMetricsHistory
+	err := query.Order("collected_at DESC").Find(&allPods).Error
+	if err != nil {
+		return nil, fmt.Errorf("查询Pod指标数据失败: %v", err)
+	}
+	
+	// 在应用层按Pod名称去重，保留最新记录
+	podMap := make(map[string]models.PodMetricsHistory)
+	for _, pod := range allPods {
+		key := fmt.Sprintf("%d_%s_%s", pod.ClusterID, pod.Namespace, pod.PodName)
+		if existing, exists := podMap[key]; !exists || pod.CollectedAt.After(existing.CollectedAt) {
+			podMap[key] = pod
+		}
+	}
+	
+	// 转换为切片返回
+	var latestPods []models.PodMetricsHistory
+	for _, pod := range podMap {
+		latestPods = append(latestPods, pod)
+	}
+	
+	return latestPods, nil
+}

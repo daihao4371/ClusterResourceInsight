@@ -27,6 +27,7 @@ func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollec
 		statisticsGroup.GET("/top-memory-request", api.GetTopMemoryRequestPods(multiCollector))
 		statisticsGroup.GET("/top-cpu-request", api.GetTopCPURequestPods(multiCollector))
 		statisticsGroup.GET("/top-resource-namespaces", api.GetTopResourceNamespaces(multiCollector))
+		statisticsGroup.GET("/resource-distribution", api.GetResourceDistribution(multiCollector)) // 新增资源分布统计接口
 	}
 
 	// 新增的命名空间相关接口

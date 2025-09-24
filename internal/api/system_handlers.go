@@ -156,3 +156,35 @@ func GetTopCPURequestPods(multiCollector *collector.MultiClusterResourceCollecto
 		}, c)
 	}
 }
+
+// GetResourceDistribution 获取资源分布统计 - 提供CPU和内存的请求量、使用量、利用率统计
+func GetResourceDistribution(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		logger.Info("获取资源分布统计数据...")
+
+		// 获取查询参数
+		clusterIDStr := c.Query("cluster_id")
+		namespace := c.Query("namespace")
+		
+		var targetClusterID *uint
+		if clusterIDStr != "" {
+			if id, err := strconv.ParseUint(clusterIDStr, 10, 32); err == nil {
+				clusterID := uint(id)
+				targetClusterID = &clusterID
+			}
+		}
+
+		// 获取资源分布统计数据
+		stats, err := multiCollector.GetResourceDistributionStats(c.Request.Context(), targetClusterID, namespace)
+		if err != nil {
+			logger.Error("获取资源分布统计失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+
+		logger.Info("资源分布统计获取完成: CPU利用率=%.1f%%, 内存利用率=%.1f%%",
+			stats.CPU.UtilizationRate, stats.Memory.UtilizationRate)
+
+		response.OkWithData(stats, c)
+	}
+}

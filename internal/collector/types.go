@@ -281,6 +281,28 @@ type PodOptimizationReport struct {
 	GeneratedAt time.Time `json:"generated_at"` // 报告生成时间
 }
 
+// ResourceDistributionStats 资源分布统计数据 - 包含CPU和内存的总体分布统计信息
+type ResourceDistributionStats struct {
+	// CPU资源统计
+	CPU struct {
+		TotalRequest     int64   `json:"totalRequest"`     // CPU总请求量 (millicores)
+		TotalUsage       int64   `json:"totalUsage"`       // CPU总使用量 (millicores)
+		UtilizationRate  float64 `json:"utilizationRate"`  // CPU利用率百分比
+	} `json:"cpu"`
+	
+	// 内存资源统计
+	Memory struct {
+		TotalRequest     int64   `json:"totalRequest"`     // 内存总请求量 (bytes)
+		TotalUsage       int64   `json:"totalUsage"`       // 内存总使用量 (bytes)
+		UtilizationRate  float64 `json:"utilizationRate"`  // 内存利用率百分比
+	} `json:"memory"`
+	
+	// 元数据信息
+	ClustersAnalyzed int       `json:"clustersAnalyzed"` // 参与统计的集群数量
+	PodsAnalyzed     int       `json:"podsAnalyzed"`     // 参与统计的Pod数量
+	GeneratedAt      time.Time `json:"generatedAt"`      // 统计数据生成时间
+}
+
 // NewResourceCollector 创建单集群资源收集器实例
 // 参数:
 //   - kubeClient: Kubernetes API客户端，用于访问集群基础资源

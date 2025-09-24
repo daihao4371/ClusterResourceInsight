@@ -37,18 +37,38 @@ func GetTopResourceNamespaces(multiCollector *collector.MultiClusterResourceColl
 	}
 }
 
-// GetAllNamespaces 获取所有命名空间列表 - 提取去重后的命名空间名称列表
+// GetAllNamespaces 获取所有命名空间列表 - 提取去重后的命名空间名称列表，支持按集群筛选
 func GetAllNamespaces(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 获取所有namespace数据（不限制数量）
-		summaries, err := multiCollector.GetTopResourceNamespaces(c.Request.Context(), -1, "combined")
+		logger.Info("开始获取命名空间列表...")
+		
+		// 获取查询参数
+		clusterIDStr := c.Query("cluster_id")
+		var clusterID *uint
+		
+		if clusterIDStr != "" {
+			if id, err := strconv.ParseUint(clusterIDStr, 10, 32); err == nil {
+				cid := uint(id)
+				clusterID = &cid
+				logger.Info("按集群筛选命名空间，集群ID: %d", cid)
+			} else {
+				logger.Error("无效的集群ID参数: %s", clusterIDStr)
+				response.BadRequest("无效的集群ID参数", c)
+				return
+			}
+		} else {
+			logger.Info("获取所有集群的命名空间列表")
+		}
+		
+		// 获取指定集群或所有集群的namespace数据
+		summaries, err := multiCollector.GetTopResourceNamespacesByCluster(c.Request.Context(), clusterID, -1, "combined")
 		if err != nil {
 			logger.Error("获取命名空间列表失败: %v", err)
 			response.InternalServerError(err.Error(), c)
 			return
 		}
 
-		// 提取命名空间名称列表
+		// 提取命名空间名称列表并去重
 		namespaces := make([]string, 0)
 		namespaceMap := make(map[string]bool)
 
@@ -59,9 +79,12 @@ func GetAllNamespaces(multiCollector *collector.MultiClusterResourceCollector) g
 			}
 		}
 
+		logger.Info("命名空间列表获取成功，集群ID: %v, 命名空间数量: %d", clusterID, len(namespaces))
+
 		response.OkWithData(gin.H{
-			"data":  namespaces,
-			"count": len(namespaces),
+			"data":       namespaces,
+			"count":      len(namespaces),
+			"cluster_id": clusterID,
 		}, c)
 	}
 }
