@@ -135,8 +135,16 @@ const namespaceSortBy = ref('combined')  // 新增：命名空间排序状态
 
 // 计算属性
 const availableClusters = computed(() => {
+  console.log('计算availableClusters，原始数据:', {
+    clusters: clusters.value,
+    analysisData: analysisData.value?.top50_problems,
+    topMemoryPods: topMemoryPods.value,
+    topCpuPods: topCpuPods.value,
+    namespaceSummary: namespaceSummary.value
+  })
+  
   return extractClusterNames(
-    clusters.value || [],
+    clusters.value || [],  // 使用所有集群，不过滤状态
     analysisData.value?.top50_problems || [],
     topMemoryPods.value || [],
     topCpuPods.value || [],

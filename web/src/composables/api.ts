@@ -26,12 +26,19 @@ export function useClusters() {
       loading.value = true
       error.value = null
       const response = await api.get<ApiResponse<any>>('/clusters')
-      // 确保返回的数据是数组格式
-      if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        clusters.value = response.data.data
+      
+      console.log('集群API原始响应数据:', response.data)
+      
+      // 确保返回的数据是数组格式 - 修复数据结构访问路径
+      if (response.data && response.data.data && response.data.data.data && Array.isArray(response.data.data.data)) {
+        clusters.value = response.data.data.data // 正确的数据路径：response.data.data.data
+        console.log('成功获取集群数据:', clusters.value.length, '个集群', clusters.value.map(c => c.cluster_name))
       } else {
         clusters.value = []
-        console.warn('集群数据格式异常，使用空数组')
+        console.warn('集群数据格式异常，期望的数据结构:', {
+          expectPath: 'response.data.data.data',
+          actualData: response.data
+        })
       }
     } catch (err) {
       error.value = err instanceof Error ? err.message : '获取集群数据失败'
