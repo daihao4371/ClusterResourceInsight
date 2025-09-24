@@ -8,18 +8,36 @@
     />
 
     <!-- 深度分析功能区 -->
-    <div class="space-y-6">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
       <!-- 统计卡片区域 -->
-      <AnalysisStatsCards
-        :top-memory-pods="topMemoryPods"
-        :top-cpu-pods="topCpuPods"
-        :namespace-summary="namespaceSummary"
-        :loading="loading"
-        @refresh-memory="fetchTopMemoryPods(20)"
-        @refresh-cpu="fetchTopCpuPods(20)"
-        @refresh-namespace="fetchNamespaceSummary"
+      <div class="lg:col-span-3">
+        <AnalysisStatsCards
+          :top-memory-pods="topMemoryPods"
+          :top-cpu-pods="topCpuPods"
+          :namespace-summary="namespaceSummary"
+          :loading="loading"
+          @refresh-memory="fetchTopMemoryPods(20)"
+          @refresh-cpu="fetchTopCpuPods(20)"
+          @refresh-namespace="fetchNamespaceSummary"
+        />
+      </div>
+
+      <!-- 活动数据优化卡片 -->
+      <ActivityOptimizationCard
+        :optimization-result="optimizationResult"
+        :loading="loadingOptimization"
+        @open-config="toggleOptimizationConfig"
       />
     </div>
+
+    <!-- 活动优化配置弹窗 -->
+    <ActivityOptimizationModal
+      :show="showOptimizationConfig"
+      :config="optimizationConfig"
+      :loading="loadingOptimization"
+      @close="closeOptimizationConfig"
+      @save="saveOptimizationConfig"
+    />
 
     <!-- 资源分布图表 -->
     <ResourceChartsSection />
