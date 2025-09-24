@@ -27,7 +27,6 @@
         :optimization-result="optimizationResult"
         :loading="loadingOptimization"
         @open-config="toggleOptimizationConfig"
-        @execute="executeOptimization"
       />
     </div>
 
@@ -173,6 +172,17 @@ const saveOptimizationConfig = async (config: any) => {
   }
 }
 
+// 静默执行优化操作，不影响用户界面
+const executeOptimizationSilently = async () => {
+  try {
+    // 后台静默执行告警去重，不显示loading状态
+    await performOptimization()
+  } catch (error) {
+    // 优化失败不影响主要功能，仅记录错误
+    console.warn('后台优化执行失败:', error)
+  }
+}
+
 const executeOptimization = async () => {
   try {
     await performOptimization()
@@ -181,13 +191,16 @@ const executeOptimization = async () => {
   }
 }
 
-// 数据刷新方法
+// 数据刷新方法 - 集成自动去重优化
 const refreshAllAnalysisData = async () => {
   await Promise.allSettled([
     fetchTopMemoryPods(20),
     fetchTopCpuPods(20),
     fetchNamespaceSummary()
   ])
+  
+  // 自动执行告警去重优化，提升数据质量
+  await executeOptimizationSilently()
 }
 
 const refreshProblems = async () => {
@@ -201,6 +214,9 @@ const refreshProblems = async () => {
   if (!analysisData.value) {
     await fetchAnalysis().catch(() => {})
   }
+  
+  // 在问题数据刷新后自动优化
+  await executeOptimizationSilently()
 }
 
 // 分页和筛选处理方法
@@ -228,6 +244,9 @@ const triggerFullCollection = async () => {
   await triggerDataCollection(true)
   await refreshAllData()
   await fetchProblemsWithPagination(1, pageSize.value, selectedCluster.value, sortBy.value)
+  
+  // 数据收集完成后自动执行优化
+  await executeOptimizationSilently()
 }
 
 // 组件挂载时初始化数据
@@ -242,5 +261,8 @@ onMounted(async () => {
     fetchAnalysis(),
     fetchOptimizationConfig()
   ])
+  
+  // 初始化完成后自动执行一次优化
+  await executeOptimizationSilently()
 })
 </script>

@@ -39,16 +39,19 @@
       
       <!-- 操作按钮 -->
       <div class="space-y-2">
-        <button 
-          class="w-full btn-primary text-sm"
-          @click="$emit('execute')"
-          :disabled="loading"
-        >
-          <Zap :class="['w-4 h-4 mr-2', { 'animate-pulse': loading }]" />
-          {{ loading ? '优化中...' : '执行优化' }}
-        </button>
+        <div class="text-center p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+          <div class="flex items-center justify-center text-green-600 dark:text-green-400 mb-1">
+            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+            </svg>
+            <span class="text-sm font-medium">智能优化</span>
+          </div>
+          <div class="text-xs text-green-600 dark:text-green-400">
+            系统已启用自动去重和降噪功能
+          </div>
+        </div>
         <div class="text-xs text-gray-500 text-center">
-          自动去重、降噪和聚合系统活动数据
+          数据刷新时自动执行去重、降噪和聚合操作
         </div>
       </div>
     </div>
@@ -75,7 +78,6 @@ interface Props {
 // 定义事件接口
 interface Emits {
   'open-config': []
-  'execute': []
 }
 
 // 接收props和定义emits

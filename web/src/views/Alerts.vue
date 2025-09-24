@@ -73,6 +73,131 @@
       </div>
     </div>
 
+    <!-- 系统测试面板 -->
+    <div v-if="showTestPanel" class="glass-card p-6 border-l-4 border-blue-500">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold">告警降噪与数据清理测试</h2>
+        <button @click="toggleTestPanel" class="text-gray-400 hover:text-gray-600">
+          ✕
+        </button>
+      </div>
+      
+      <!-- 数据库统计显示 -->
+      <div v-if="databaseStats" class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+        <h3 class="text-lg font-semibold mb-3">当前数据状态</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="text-center">
+            <div class="text-2xl font-bold text-blue-600">{{ databaseStats.total_activities }}</div>
+            <div class="text-sm text-gray-600 dark:text-gray-400">总活动数</div>
+          </div>
+          <div class="text-center">
+            <div class="text-2xl font-bold text-red-600">{{ databaseStats.total_alerts }}</div>
+            <div class="text-sm text-gray-600 dark:text-gray-400">总告警数</div>
+          </div>
+          <div class="text-center">
+            <div class="text-2xl font-bold text-yellow-600">{{ databaseStats.duplicate_alerts }}</div>
+            <div class="text-sm text-gray-600 dark:text-gray-400">重复告警</div>
+          </div>
+          <div class="text-center">
+            <div class="text-2xl font-bold text-green-600">{{ databaseStats.alert_status?.active || 0 }}</div>
+            <div class="text-sm text-gray-600 dark:text-gray-400">活跃告警</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 测试操作按钮组 -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <!-- 获取统计信息 -->
+        <div class="p-4 border rounded-lg border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+          <div class="flex items-center mb-2">
+            <div class="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+            <h4 class="font-medium text-blue-700 dark:text-blue-300">数据库状态</h4>
+          </div>
+          <button @click="fetchDatabaseStats" 
+                  :disabled="testLoading.stats"
+                  class="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded transition-colors text-sm shadow-md hover:shadow-lg">
+            <div class="flex items-center justify-center">
+              <svg v-if="testLoading.stats" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>{{ testLoading.stats ? '获取中...' : '📊 刷新统计' }}</span>
+            </div>
+          </button>
+        </div>
+
+        <!-- 告警去重 -->
+        <div class="p-4 border rounded-lg border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20">
+          <div class="flex items-center mb-2">
+            <div class="w-3 h-3 bg-orange-500 rounded-full mr-2"></div>
+            <h4 class="font-medium text-orange-700 dark:text-orange-300">告警降噪</h4>
+          </div>
+          <button @click="executeDeduplication" 
+                  :disabled="testLoading.deduplicate"
+                  class="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-orange-400 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded transition-colors text-sm shadow-md hover:shadow-lg">
+            <div class="flex items-center justify-center">
+              <svg v-if="testLoading.deduplicate" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>{{ testLoading.deduplicate ? '去重中...' : '执行去重' }}</span>
+            </div>
+          </button>
+          <div v-if="lastDeduplicationResult" class="mt-2 text-xs text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-800/30 px-2 py-1 rounded">
+            ✅ 上次去重: 删除 {{ lastDeduplicationResult.removed_count }} 条重复记录
+          </div>
+        </div>
+
+        <!-- 数据清理 -->
+        <div class="p-4 border rounded-lg border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
+          <div class="flex items-center mb-2">
+            <div class="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
+            <h4 class="font-medium text-red-700 dark:text-red-300">数据清理</h4>
+          </div>
+          <div class="flex items-center space-x-2 mb-2">
+            <input v-model.number="retentionDays" 
+                   type="number" 
+                   min="0" 
+                   max="365"
+                   placeholder="天数"
+                   class="w-16 px-2 py-1 border border-red-300 dark:border-red-600 rounded text-xs focus:ring-2 focus:ring-red-500 focus:border-red-500">
+            <span class="text-xs text-red-600 dark:text-red-400">天前数据将被删除</span>
+          </div>
+          <button @click="executeCleanup" 
+                  :disabled="testLoading.cleanup"
+                  class="w-full bg-red-500 hover:bg-red-600 disabled:bg-red-400 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded transition-colors text-sm shadow-md hover:shadow-lg">
+            <div class="flex items-center justify-center">
+              <svg v-if="testLoading.cleanup" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>{{ testLoading.cleanup ? '清理中...' : '⚠️ 执行清理' }}</span>
+            </div>
+          </button>
+          <div v-if="lastCleanupResult" class="mt-2 text-xs text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-800/30 px-2 py-1 rounded">
+            ✅ 上次清理: 活动-{{ lastCleanupResult.removed_activities }}条, 告警-{{ lastCleanupResult.removed_alerts }}条
+          </div>
+        </div>
+      </div>
+
+      <!-- 测试日志 -->
+      <div v-if="testLogs.length > 0" class="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+        <div class="flex items-center justify-between mb-2">
+          <h4 class="font-medium text-sm">操作日志</h4>
+          <button @click="clearTestLogs" class="text-xs text-blue-600 hover:text-blue-800">
+            清空
+          </button>
+        </div>
+        <div class="max-h-32 overflow-y-auto space-y-1">
+          <div v-for="log in testLogs.slice(0, 10)" :key="log.timestamp" 
+               class="text-xs"
+               :class="getLogClass(log.level)">
+            [{{ formatLogTime(log.timestamp) }}] {{ log.message }}
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 告警列表 -->
     <div class="glass-card">
       <div class="p-6 border-b" style="border-color: var(--border-color);">
@@ -391,8 +516,139 @@ const generateDefaultDetails = (alert) => {
   }
 }
 
+// 测试面板相关状态
+const showTestPanel = ref(true) // 默认显示测试面板，方便前后端联调
+const databaseStats = ref(null)
+const testLoading = ref({
+  stats: false,
+  deduplicate: false,
+  cleanup: false
+})
+const testLogs = ref([])
+const retentionDays = ref(7) // 数据清理保留天数
+const lastDeduplicationResult = ref(null)
+const lastCleanupResult = ref(null)
+
+// 测试面板方法
+const toggleTestPanel = () => {
+  showTestPanel.value = !showTestPanel.value
+}
+
+const fetchDatabaseStats = async () => {
+  testLoading.value.stats = true
+  try {
+    const response = await fetch('/api/activities/database-stats')
+    const result = await response.json()
+    
+    if (result.code === 0) {
+      databaseStats.value = result.data
+      addTestLog('success', `获取数据库统计成功 - 总告警: ${result.data.total_alerts}, 重复: ${result.data.duplicate_alerts}`)
+    } else {
+      throw new Error(result.msg)
+    }
+  } catch (error) {
+    addTestLog('error', `获取数据库统计失败: ${error.message}`)
+    console.error('获取数据库统计失败:', error)
+  } finally {
+    testLoading.value.stats = false
+  }
+}
+
+const executeDeduplication = async () => {
+  testLoading.value.deduplicate = true
+  try {
+    const response = await fetch('/api/alerts/deduplicate', {
+      method: 'POST'
+    })
+    const result = await response.json()
+    
+    if (result.code === 0) {
+      lastDeduplicationResult.value = result.data
+      addTestLog('success', `告警去重完成 - 删除: ${result.data.removed_count}条, 保留: ${result.data.success_count}条`)
+      // 更新数据库统计
+      await fetchDatabaseStats()
+      // 刷新告警列表
+      await refreshAlerts()
+    } else {
+      throw new Error(result.msg)
+    }
+  } catch (error) {
+    addTestLog('error', `告警去重失败: ${error.message}`)
+    console.error('告警去重失败:', error)
+  } finally {
+    testLoading.value.deduplicate = false
+  }
+}
+
+const executeCleanup = async () => {
+  testLoading.value.cleanup = true
+  try {
+    const response = await fetch(`/api/activities/cleanup?retention_days=${retentionDays.value}&with_stats=true`, {
+      method: 'DELETE'
+    })
+    const result = await response.json()
+    
+    if (result.code === 0) {
+      lastCleanupResult.value = result.data
+      addTestLog('success', `数据清理完成 - 活动删除: ${result.data.removed_activities}条, 告警删除: ${result.data.removed_alerts}条`)
+      // 更新数据库统计
+      await fetchDatabaseStats()
+      // 刷新告警列表
+      await refreshAlerts()
+    } else {
+      throw new Error(result.msg)
+    }
+  } catch (error) {
+    addTestLog('error', `数据清理失败: ${error.message}`)
+    console.error('数据清理失败:', error)
+  } finally {
+    testLoading.value.cleanup = false
+  }
+}
+
+const addTestLog = (level, message) => {
+  testLogs.value.unshift({
+    level,
+    message,
+    timestamp: new Date()
+  })
+  
+  // 限制日志数量
+  if (testLogs.value.length > 50) {
+    testLogs.value = testLogs.value.slice(0, 50)
+  }
+}
+
+const clearTestLogs = () => {
+  testLogs.value = []
+}
+
+const getLogClass = (level) => {
+  switch (level) {
+    case 'success':
+      return 'text-green-600'
+    case 'error':
+      return 'text-red-600'
+    case 'warning':
+      return 'text-yellow-600'
+    default:
+      return 'text-gray-600'
+  }
+}
+
+const formatLogTime = (timestamp) => {
+  return timestamp.toLocaleTimeString('zh-CN', { 
+    hour12: false, 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    second: '2-digit' 
+  })
+}
+
 // 生命周期
 onMounted(() => {
   refreshAlerts()
+  // 初始化时获取数据库统计信息
+  fetchDatabaseStats()
 })
 </script>

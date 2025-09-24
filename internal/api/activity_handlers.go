@@ -174,6 +174,22 @@ func CleanupOldActivitiesAndAlerts(activityService *service.ActivityService) gin
 			retentionDays = 0
 		}
 
+		// 检查是否需要详细统计信息
+		withStats := c.DefaultQuery("with_stats", "false")
+		if withStats == "true" {
+			// 使用带统计信息的清理方法
+			result, err := activityService.CleanupOldActivitiesWithStats(c.Request.Context(), retentionDays)
+			if err != nil {
+				logger.Error("清理旧数据失败: %v", err)
+				response.InternalServerError(err.Error(), c)
+				return
+			}
+
+			response.OkWithData(result, c)
+			return
+		}
+
+		// 使用普通清理方法
 		err = activityService.CleanupOldActivities(c.Request.Context(), retentionDays)
 		if err != nil {
 			logger.Error("清理旧数据失败: %v", err)
@@ -249,6 +265,35 @@ func GetActivityStats(activityService *service.ActivityService) gin.HandlerFunc 
 		stats, err := activityService.GetActivityStats(hours)
 		if err != nil {
 			logger.Error("获取活动统计失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+
+		response.OkWithData(stats, c)
+	}
+}
+
+// DeduplicateAlerts 执行告警去重清理 - 清理数据库中重复的告警记录
+func DeduplicateAlerts(activityService *service.ActivityService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 执行去重清理
+		result, err := activityService.CleanupDuplicateAlerts(c.Request.Context())
+		if err != nil {
+			logger.Error("告警去重清理失败: %v", err)
+			response.InternalServerError(err.Error(), c)
+			return
+		}
+
+		response.OkWithData(result, c)
+	}
+}
+
+// GetDatabaseStats 获取数据库统计信息 - 查看当前活动和告警的数据状态
+func GetDatabaseStats(activityService *service.ActivityService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		stats, err := activityService.GetDatabaseStats()
+		if err != nil {
+			logger.Error("获取数据库统计失败: %v", err)
 			response.InternalServerError(err.Error(), c)
 			return
 		}
