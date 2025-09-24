@@ -1,17 +1,18 @@
 <template>
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Top内存请求Pod -->
-    <div class="glass-card bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-300">
-      <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+    <div class="glass-card hover:shadow-lg transition-all duration-300" style="background: var(--card-bg); border: 1px solid var(--border-color);">
+      <div class="p-6 border-b" style="border-color: var(--border-color);">
         <div class="flex items-center justify-between">
           <div class="flex items-center space-x-3">
-            <div class="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-              <Database class="w-5 h-5 text-green-600 dark:text-green-400" />
+            <div class="p-2 rounded-lg" style="background: var(--icon-bg-memory);">
+              <Database class="w-5 h-5" style="color: var(--icon-color-memory);" />
             </div>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Top内存请求Pod</h3>
+            <h3 class="text-lg font-semibold" style="color: var(--text-primary);">Top内存请求Pod</h3>
           </div>
           <button 
-            class="btn-secondary text-sm hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+            class="btn-secondary text-sm transition-colors"
+            style="background: var(--btn-secondary-bg); color: var(--btn-secondary-text); border: 1px solid var(--border-color);"
             @click="$emit('refresh-memory')"
             :disabled="loading"
           >
@@ -21,23 +22,24 @@
         </div>
       </div>
       <div class="p-4 max-h-80 overflow-y-auto">
-        <div v-if="!topMemoryPods || topMemoryPods.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
-          <Database class="w-8 h-8 mx-auto mb-2 text-gray-400 dark:text-gray-500" />
+        <div v-if="!topMemoryPods || topMemoryPods.length === 0" class="text-center py-8" style="color: var(--text-secondary);">
+          <Database class="w-8 h-8 mx-auto mb-2" style="color: var(--text-muted);" />
           <p>暂无数据</p>
         </div>
         <div v-else class="space-y-3">
           <div 
             v-for="pod in topMemoryPods.slice(0, 10)"
             :key="`memory-${pod.cluster_name}-${pod.namespace}-${pod.pod_name}`"
-            class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600/40 hover:border-gray-300 dark:hover:border-gray-500/60 hover:bg-gray-100 dark:hover:bg-gray-600/40 transition-all duration-200"
+            class="flex items-center justify-between p-3 rounded-lg border transition-all duration-200 hover:shadow-sm"
+            style="background: var(--item-bg); border-color: var(--border-color);"
           >
             <div class="flex-1 min-w-0">
-              <div class="font-medium text-sm truncate text-gray-900 dark:text-gray-100">{{ pod.pod_name }}</div>
-              <div class="text-xs text-gray-600 dark:text-gray-400">{{ pod.namespace }}</div>
+              <div class="font-medium text-sm truncate" style="color: var(--text-primary);">{{ pod.pod_name }}</div>
+              <div class="text-xs" style="color: var(--text-secondary);">{{ pod.namespace }}</div>
             </div>
             <div class="text-right">
-              <div class="text-sm font-semibold text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded">{{ formatMemoryValue(pod.memory_request) }}</div>
-              <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">请求量</div>
+              <div class="text-sm font-semibold px-2 py-1 rounded" style="color: var(--text-primary); background: var(--value-bg);">{{ formatMemoryValue(pod.memory_request) }}</div>
+              <div class="text-xs mt-1" style="color: var(--text-muted);">请求量</div>
             </div>
           </div>
         </div>
@@ -45,17 +47,18 @@
     </div>
 
     <!-- Top CPU请求Pod -->
-    <div class="glass-card bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-300">
-      <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+    <div class="glass-card hover:shadow-lg transition-all duration-300" style="background: var(--card-bg); border: 1px solid var(--border-color);">
+      <div class="p-6 border-b" style="border-color: var(--border-color);">
         <div class="flex items-center justify-between">
           <div class="flex items-center space-x-3">
-            <div class="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
-              <Cpu class="w-5 h-5 text-orange-600 dark:text-orange-400" />
+            <div class="p-2 rounded-lg" style="background: var(--icon-bg-cpu);">
+              <Cpu class="w-5 h-5" style="color: var(--icon-color-cpu);" />
             </div>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Top CPU请求Pod</h3>
+            <h3 class="text-lg font-semibold" style="color: var(--text-primary);">Top CPU请求Pod</h3>
           </div>
           <button 
-            class="btn-secondary text-sm hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+            class="btn-secondary text-sm transition-colors"
+            style="background: var(--btn-secondary-bg); color: var(--btn-secondary-text); border: 1px solid var(--border-color);"
             @click="$emit('refresh-cpu')"
             :disabled="loading"
           >
@@ -65,23 +68,24 @@
         </div>
       </div>
       <div class="p-4 max-h-80 overflow-y-auto">
-        <div v-if="!topCpuPods || topCpuPods.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
-          <Cpu class="w-8 h-8 mx-auto mb-2 text-gray-400 dark:text-gray-500" />
+        <div v-if="!topCpuPods || topCpuPods.length === 0" class="text-center py-8" style="color: var(--text-secondary);">
+          <Cpu class="w-8 h-8 mx-auto mb-2" style="color: var(--text-muted);" />
           <p>暂无数据</p>
         </div>
         <div v-else class="space-y-3">
           <div 
             v-for="pod in topCpuPods.slice(0, 10)"
             :key="`cpu-${pod.cluster_name}-${pod.namespace}-${pod.pod_name}`"
-            class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600/40 hover:border-gray-300 dark:hover:border-gray-500/60 hover:bg-gray-100 dark:hover:bg-gray-600/40 transition-all duration-200"
+            class="flex items-center justify-between p-3 rounded-lg border transition-all duration-200 hover:shadow-sm"
+            style="background: var(--item-bg); border-color: var(--border-color);"
           >
             <div class="flex-1 min-w-0">
-              <div class="font-medium text-sm truncate text-gray-900 dark:text-gray-100">{{ pod.pod_name }}</div>
-              <div class="text-xs text-gray-600 dark:text-gray-400">{{ pod.namespace }}</div>
+              <div class="font-medium text-sm truncate" style="color: var(--text-primary);">{{ pod.pod_name }}</div>
+              <div class="text-xs" style="color: var(--text-secondary);">{{ pod.namespace }}</div>
             </div>
             <div class="text-right">
-              <div class="text-sm font-semibold text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/30 px-2 py-1 rounded">{{ formatCpuValue(pod.cpu_request) }}</div>
-              <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">请求量</div>
+              <div class="text-sm font-semibold px-2 py-1 rounded" style="color: var(--text-primary); background: var(--value-bg);">{{ formatCpuValue(pod.cpu_request) }}</div>
+              <div class="text-xs mt-1" style="color: var(--text-muted);">请求量</div>
             </div>
           </div>
         </div>
@@ -89,12 +93,18 @@
     </div>
 
     <!-- 命名空间汇总 -->
-    <div class="glass-card">
-      <div class="p-6 border-b border-gray-700">
+    <div class="glass-card hover:shadow-lg transition-all duration-300" style="background: var(--card-bg); border: 1px solid var(--border-color);">
+      <div class="p-6 border-b" style="border-color: var(--border-color);">
         <div class="flex items-center justify-between">
-          <h3 class="text-lg font-semibold">命名空间汇总</h3>
+          <div class="flex items-center space-x-3">
+            <div class="p-2 rounded-lg" style="background: var(--icon-bg-namespace);">
+              <Layers class="w-5 h-5" style="color: var(--icon-color-namespace);" />
+            </div>
+            <h3 class="text-lg font-semibold" style="color: var(--text-primary);">命名空间汇总</h3>
+          </div>
           <button 
-            class="btn-secondary text-sm"
+            class="btn-secondary text-sm transition-colors"
+            style="background: var(--btn-secondary-bg); color: var(--btn-secondary-text); border: 1px solid var(--border-color);"
             @click="$emit('refresh-namespace')"
             :disabled="loading"
           >
@@ -104,28 +114,29 @@
         </div>
       </div>
       <div class="p-4 max-h-80 overflow-y-auto">
-        <div v-if="!namespaceSummary || namespaceSummary.length === 0" class="text-center py-8 text-gray-500">
-          <Layers class="w-8 h-8 mx-auto mb-2" />
+        <div v-if="!namespaceSummary || namespaceSummary.length === 0" class="text-center py-8" style="color: var(--text-secondary);">
+          <Layers class="w-8 h-8 mx-auto mb-2" style="color: var(--text-muted);" />
           <p>暂无数据</p>
         </div>
         <div v-else class="space-y-3">
           <div 
             v-for="ns in namespaceSummary.slice(0, 8)"
             :key="`ns-${ns.cluster_name}-${ns.namespace_name}`"
-            class="p-3 bg-dark-800/30 rounded-lg"
+            class="p-3 rounded-lg border transition-all duration-200 hover:shadow-sm"
+            style="background: var(--item-bg); border-color: var(--border-color);"
           >
             <div class="flex items-center justify-between mb-2">
-              <div class="font-medium text-sm">{{ ns.namespace_name }}</div>
-              <div class="text-xs text-gray-400">{{ ns.cluster_name }}</div>
+              <div class="font-medium text-sm" style="color: var(--text-primary);">{{ ns.namespace_name }}</div>
+              <div class="text-xs" style="color: var(--text-secondary);">{{ ns.cluster_name }}</div>
             </div>
             <div class="grid grid-cols-2 gap-2 text-xs">
               <div>
-                <span class="text-gray-400">Pod数:</span>
-                <span class="ml-1 text-white">{{ ns.pod_count }}</span>
+                <span style="color: var(--text-muted);">Pod数:</span>
+                <span class="ml-1 font-medium" style="color: var(--text-primary);">{{ ns.pod_count }}</span>
               </div>
               <div>
-                <span class="text-gray-400">运行中:</span>
-                <span class="ml-1 text-success-400">{{ ns.running_pods }}</span>
+                <span style="color: var(--text-muted);">运行中:</span>
+                <span class="ml-1 font-medium" style="color: var(--success-color);">{{ ns.running_pods }}</span>
               </div>
             </div>
           </div>
