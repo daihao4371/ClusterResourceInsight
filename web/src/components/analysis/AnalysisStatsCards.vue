@@ -95,12 +95,12 @@
     <!-- 命名空间汇总 -->
     <div class="glass-card hover:shadow-lg transition-all duration-300" style="background: var(--card-bg); border: 1px solid var(--border-color);">
       <div class="p-6 border-b" style="border-color: var(--border-color);">
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between mb-3">
           <div class="flex items-center space-x-3">
             <div class="p-2 rounded-lg" style="background: var(--icon-bg-namespace);">
               <Layers class="w-5 h-5" style="color: var(--icon-color-namespace);" />
             </div>
-            <h3 class="text-lg font-semibold" style="color: var(--text-primary);">命名空间汇总</h3>
+            <h3 class="text-lg font-semibold" style="color: var(--text-primary);">Top 命名空间汇总</h3>
           </div>
           <button 
             class="btn-secondary text-sm transition-colors"
@@ -112,9 +112,35 @@
             刷新
           </button>
         </div>
+        <!-- 排序选择器 -->
+        <div class="flex items-center justify-between">
+          <div class="text-xs" style="color: var(--text-muted);">
+            按资源使用量排序
+          </div>
+          <div class="relative">
+            <select
+              :value="namespaceSortBy || 'combined'"
+              @change="$emit('namespace-sort-change', ($event.target as HTMLSelectElement).value)"
+              class="appearance-none text-xs px-2 py-1 pr-6 rounded border transition-colors"
+              style="background: var(--btn-secondary-bg); color: var(--btn-secondary-text); border-color: var(--border-color);"
+              :disabled="loading"
+            >
+              <option value="combined">综合资源</option>
+              <option value="memory">内存使用量</option>
+              <option value="cpu">CPU使用量</option>
+            </select>
+            <ChevronDown class="absolute right-1 top-1/2 transform -translate-y-1/2 w-3 h-3 pointer-events-none" style="color: var(--text-muted);" />
+          </div>
+        </div>
       </div>
       <div class="p-4 max-h-80 overflow-y-auto">
-        <div v-if="!namespaceSummary || namespaceSummary.length === 0" class="text-center py-8" style="color: var(--text-secondary);">
+        <!-- 加载状态 -->
+        <div v-if="loading" class="text-center py-8">
+          <RefreshCw class="w-8 h-8 mx-auto mb-2 animate-spin" style="color: var(--text-primary);" />
+          <p style="color: var(--text-secondary);">加载中...</p>
+        </div>
+        <!-- 空数据状态 -->
+        <div v-else-if="!namespaceSummary || namespaceSummary.length === 0" class="text-center py-8" style="color: var(--text-secondary);">
           <Layers class="w-8 h-8 mx-auto mb-2" style="color: var(--text-muted);" />
           <p>暂无数据</p>
         </div>
@@ -135,8 +161,16 @@
                 <span class="ml-1 font-medium" style="color: var(--text-primary);">{{ ns.total_pods }}</span>
               </div>
               <div>
-                <span style="color: var(--text-muted);">运行中:</span>
+                <span style="color: var(--text-muted);">正常:</span>
                 <span class="ml-1 font-medium" style="color: var(--success-color);">{{ getRunningPods(ns) }}</span>
+              </div>
+              <div>
+                <span style="color: var(--text-muted);">内存:</span>
+                <span class="ml-1 font-medium" style="color: var(--text-primary);">{{ formatMemoryValue(ns.total_memory_usage) }}</span>
+              </div>
+              <div>
+                <span style="color: var(--text-muted);">CPU:</span>
+                <span class="ml-1 font-medium" style="color: var(--text-primary);">{{ formatCpuValue(ns.total_cpu_usage) }}</span>
               </div>
             </div>
           </div>
@@ -147,7 +181,7 @@
 </template>
 
 <script setup lang="ts">
-import { RefreshCw, Database, Cpu, Layers } from 'lucide-vue-next'
+import { RefreshCw, Database, Cpu, Layers, ChevronDown } from 'lucide-vue-next'
 import { formatCpuValue, formatMemoryValue } from '../../utils/analysis'
 
 // 定义Pod接口类型
@@ -182,6 +216,7 @@ interface Props {
   topMemoryPods?: Pod[]
   topCpuPods?: Pod[]
   namespaceSummary?: NamespaceSummary[]
+  namespaceSortBy?: string  // 新增：命名空间排序方式
   loading?: boolean
 }
 
@@ -190,6 +225,7 @@ interface Emits {
   'refresh-memory': []
   'refresh-cpu': []
   'refresh-namespace': []
+  'namespace-sort-change': [sortBy: string]  // 新增：命名空间排序变更事件
 }
 
 // 接收props和定义emits

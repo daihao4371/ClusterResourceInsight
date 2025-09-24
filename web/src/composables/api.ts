@@ -373,10 +373,12 @@ export function useAnalysis() {
     }
   }
 
-  const fetchNamespaceSummary = async () => {
+  const fetchNamespaceSummary = async (limit: number = 10, sortBy: string = 'combined') => {
     try {
-      const response = await api.get<ApiResponse<any>>('/statistics/namespace-summary')
-      // 处理嵌套的数据结构：response.data.data.data
+      const response = await api.get<ApiResponse<any>>('/statistics/top-resource-namespaces', {
+        params: { limit, sort_by: sortBy }
+      })
+      // 处理正确的数据结构：response.data.data.data
       if (response.data && response.data.data && Array.isArray(response.data.data.data)) {
         namespaceSummary.value = response.data.data.data
         console.log('✓ 命名空间汇总数据获取成功:', response.data.data.data.length, '条记录')
@@ -419,7 +421,7 @@ export function useAnalysis() {
         fetchAnalysis(),
         fetchTopMemoryPods(20),
         fetchTopCpuPods(20),
-        fetchNamespaceSummary()
+        fetchNamespaceSummary(10, 'combined')
       ])
 
       // 处理结果，即使部分失败也要展示成功的数据

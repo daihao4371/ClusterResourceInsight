@@ -4,23 +4,35 @@ import (
 	"cluster-resource-insight/internal/collector"
 	"cluster-resource-insight/internal/logger"
 	"cluster-resource-insight/internal/response"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
-// GetNamespacesSummary 获取命名空间汇总信息 - 返回所有集群的命名空间统计数据
-func GetNamespacesSummary(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
+// GetTopResourceNamespaces 获取资源使用最高的命名空间 - 按资源使用量排序返回
+func GetTopResourceNamespaces(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		summaries, err := multiCollector.GetNamespacesSummary(c.Request.Context())
+		// 获取查询参数
+		limitStr := c.DefaultQuery("limit", "10")
+		sortBy := c.DefaultQuery("sort_by", "combined") // memory, cpu, combined
+		
+		limit := 10
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+
+		summaries, err := multiCollector.GetTopResourceNamespaces(c.Request.Context(), limit, sortBy)
 		if err != nil {
-			logger.Error("获取命名空间汇总失败: %v", err)
+			logger.Error("获取资源使用最高的命名空间失败: %v", err)
 			response.InternalServerError(err.Error(), c)
 			return
 		}
 
 		response.OkWithData(gin.H{
-			"data":  summaries,
-			"count": len(summaries),
+			"data":    summaries,
+			"count":   len(summaries),
+			"limit":   limit,
+			"sort_by": sortBy,
 		}, c)
 	}
 }
@@ -28,7 +40,8 @@ func GetNamespacesSummary(multiCollector *collector.MultiClusterResourceCollecto
 // GetAllNamespaces 获取所有命名空间列表 - 提取去重后的命名空间名称列表
 func GetAllNamespaces(multiCollector *collector.MultiClusterResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		summaries, err := multiCollector.GetNamespacesSummary(c.Request.Context())
+		// 获取所有namespace数据（不限制数量）
+		summaries, err := multiCollector.GetTopResourceNamespaces(c.Request.Context(), -1, "combined")
 		if err != nil {
 			logger.Error("获取命名空间列表失败: %v", err)
 			response.InternalServerError(err.Error(), c)

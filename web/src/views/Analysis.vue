@@ -15,10 +15,12 @@
           :top-memory-pods="topMemoryPods"
           :top-cpu-pods="topCpuPods"
           :namespace-summary="namespaceSummary"
+          :namespace-sort-by="namespaceSortBy"
           :loading="loading"
           @refresh-memory="fetchTopMemoryPods(20)"
           @refresh-cpu="fetchTopCpuPods(20)"
-          @refresh-namespace="fetchNamespaceSummary"
+          @refresh-namespace="refreshNamespaceSummary"
+          @namespace-sort-change="handleNamespaceSortChange"
         />
       </div>
 
@@ -129,6 +131,7 @@ const showOptimizationConfig = ref(false)
 const sortBy = ref('total_waste')
 const selectedCluster = ref('')
 const pageSize = ref(10)
+const namespaceSortBy = ref('combined')  // 新增：命名空间排序状态
 
 // 计算属性
 const availableClusters = computed(() => {
@@ -191,12 +194,22 @@ const executeOptimization = async () => {
   }
 }
 
+// 命名空间排序相关方法
+const refreshNamespaceSummary = async () => {
+  await fetchNamespaceSummary(10, namespaceSortBy.value)
+}
+
+const handleNamespaceSortChange = async (newSortBy: string) => {
+  namespaceSortBy.value = newSortBy
+  await fetchNamespaceSummary(10, newSortBy)
+}
+
 // 数据刷新方法 - 集成自动去重优化
 const refreshAllAnalysisData = async () => {
   await Promise.allSettled([
     fetchTopMemoryPods(20),
     fetchTopCpuPods(20),
-    fetchNamespaceSummary()
+    fetchNamespaceSummary(10, namespaceSortBy.value)
   ])
   
   // 自动执行告警去重优化，提升数据质量
@@ -257,7 +270,7 @@ onMounted(async () => {
   await Promise.allSettled([
     fetchTopMemoryPods(20),
     fetchTopCpuPods(20),
-    fetchNamespaceSummary(),
+    fetchNamespaceSummary(10, namespaceSortBy.value),
     fetchAnalysis(),
     fetchOptimizationConfig()
   ])

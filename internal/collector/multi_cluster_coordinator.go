@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -252,8 +253,15 @@ analysis:
 	return analysisResult, nil
 }
 
-// GetNamespacesSummary 获取所有命名空间汇总信息
-func (mc *MultiClusterResourceCollector) GetNamespacesSummary(ctx context.Context) ([]NamespaceSummary, error) {
+// GetTopResourceNamespaces 获取资源使用最高的命名空间 - 按指定方式排序并限制返回数量
+// 参数:
+//   - ctx: 上下文对象
+//   - limit: 返回数量限制，-1表示返回所有
+//   - sortBy: 排序方式 - "memory"(按内存), "cpu"(按CPU), "combined"(按综合资源)
+// 返回:
+//   - []NamespaceSummary: 排序后的命名空间汇总列表
+//   - error: 处理过程中的错误信息
+func (mc *MultiClusterResourceCollector) GetTopResourceNamespaces(ctx context.Context, limit int, sortBy string) ([]NamespaceSummary, error) {
 	clusters, err := mc.clusterService.GetAllClusters()
 	if err != nil {
 		return nil, fmt.Errorf("获取集群列表失败: %v", err)
@@ -284,7 +292,39 @@ func (mc *MultiClusterResourceCollector) GetNamespacesSummary(ctx context.Contex
 		summaries = append(summaries, namespaceSummaries...)
 	}
 
+	// 根据指定方式排序
+	mc.sortNamespacesByResource(summaries, sortBy)
+
+	// 限制返回数量
+	if limit > 0 && len(summaries) > limit {
+		summaries = summaries[:limit]
+	}
+
 	return summaries, nil
+}
+
+// sortNamespacesByResource 根据资源使用量对namespace进行排序
+// 参数:
+//   - summaries: 待排序的namespace汇总切片
+//   - sortBy: 排序方式 - "memory", "cpu", "combined"
+func (mc *MultiClusterResourceCollector) sortNamespacesByResource(summaries []NamespaceSummary, sortBy string) {
+	sort.Slice(summaries, func(i, j int) bool {
+		switch sortBy {
+		case "memory":
+			// 按内存使用量从大到小排序
+			return summaries[i].TotalMemoryUsage > summaries[j].TotalMemoryUsage
+		case "cpu":
+			// 按CPU使用量从大到小排序  
+			return summaries[i].TotalCPUUsage > summaries[j].TotalCPUUsage
+		case "combined":
+			fallthrough
+		default:
+			// 按综合资源使用量排序（内存权重0.6，CPU权重0.4）
+			scoreI := float64(summaries[i].TotalMemoryUsage)*0.6 + float64(summaries[i].TotalCPUUsage)*0.4
+			scoreJ := float64(summaries[j].TotalMemoryUsage)*0.6 + float64(summaries[j].TotalCPUUsage)*0.4
+			return scoreI > scoreJ
+		}
+	})
 }
 
 // GetNamespacePods 获取指定命名空间下的所有Pod
