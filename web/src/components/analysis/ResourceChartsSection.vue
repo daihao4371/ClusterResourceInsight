@@ -4,8 +4,8 @@
     <div class="glass-card hover:shadow-lg transition-all duration-300" style="background: var(--card-bg); border: 1px solid var(--border-color);">
       <div class="p-6 border-b" style="border-color: var(--border-color);">
         <div class="flex items-center space-x-3">
-          <div class="p-2 rounded-lg" style="background: var(--icon-bg-cpu);">
-            <BarChart3 class="w-5 h-5" style="color: var(--icon-color-cpu);" />
+          <div class="p-2 bg-blue-500/10 dark:bg-blue-400/20 rounded-lg">
+            <BarChart3 class="w-5 h-5 text-blue-600 dark:text-blue-400" />
           </div>
           <h3 class="text-lg font-semibold" style="color: var(--text-primary);">CPU资源分布</h3>
         </div>
@@ -34,17 +34,16 @@
             <span>CPU使用率</span>
             <span>{{ cpuStats.utilizationRate }}%</span>
           </div>
-          <div class="w-full rounded-full h-3" style="background: var(--progress-bg);">
+          <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
             <div 
-              class="h-3 rounded-full transition-all duration-500 ease-out"
-              style="background: var(--cpu-progress-color);"
+              class="bg-blue-500 dark:bg-blue-400 h-3 rounded-full transition-all duration-500 ease-out"
               :style="{ width: `${Math.min(cpuStats.utilizationRate, 100)}%` }"
             ></div>
           </div>
           <div class="text-xs" style="color: var(--text-muted);">
-            <span v-if="cpuStats.utilizationRate < 50" style="color: var(--success-color);">• 资源充足</span>
-            <span v-else-if="cpuStats.utilizationRate < 80" style="color: var(--warning-color);">• 使用适中</span>
-            <span v-else style="color: var(--danger-color);">• 资源紧张</span>
+            <span v-if="cpuStats.utilizationRate < 50" class="text-green-600 dark:text-green-400">• 资源充足</span>
+            <span v-else-if="cpuStats.utilizationRate < 80" class="text-yellow-600 dark:text-yellow-400">• 使用适中</span>
+            <span v-else class="text-red-600 dark:text-red-400">• 资源紧张</span>
           </div>
         </div>
       </div>
@@ -54,8 +53,8 @@
     <div class="glass-card hover:shadow-lg transition-all duration-300" style="background: var(--card-bg); border: 1px solid var(--border-color);">
       <div class="p-6 border-b" style="border-color: var(--border-color);">
         <div class="flex items-center space-x-3">
-          <div class="p-2 rounded-lg" style="background: var(--icon-bg-memory);">
-            <PieChart class="w-5 h-5" style="color: var(--icon-color-memory);" />
+          <div class="p-2 bg-green-500/10 dark:bg-green-400/20 rounded-lg">
+            <PieChart class="w-5 h-5 text-green-600 dark:text-green-400" />
           </div>
           <h3 class="text-lg font-semibold" style="color: var(--text-primary);">内存资源分布</h3>
         </div>
@@ -84,17 +83,16 @@
             <span>内存使用率</span>
             <span>{{ memoryStats.utilizationRate }}%</span>
           </div>
-          <div class="w-full rounded-full h-3" style="background: var(--progress-bg);">
+          <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
             <div 
-              class="h-3 rounded-full transition-all duration-500 ease-out"
-              style="background: var(--memory-progress-color);"
+              class="bg-green-500 dark:bg-green-400 h-3 rounded-full transition-all duration-500 ease-out"
               :style="{ width: `${Math.min(memoryStats.utilizationRate, 100)}%` }"
             ></div>
           </div>
           <div class="text-xs" style="color: var(--text-muted);">
-            <span v-if="memoryStats.utilizationRate < 60" style="color: var(--success-color);">• 内存充足</span>
-            <span v-else-if="memoryStats.utilizationRate < 85" style="color: var(--warning-color);">• 使用适中</span>
-            <span v-else style="color: var(--danger-color);">• 内存紧张</span>
+            <span v-if="memoryStats.utilizationRate < 60" class="text-green-600 dark:text-green-400">• 内存充足</span>
+            <span v-else-if="memoryStats.utilizationRate < 85" class="text-yellow-600 dark:text-yellow-400">• 使用适中</span>
+            <span v-else class="text-red-600 dark:text-red-400">• 内存紧张</span>
           </div>
         </div>
       </div>

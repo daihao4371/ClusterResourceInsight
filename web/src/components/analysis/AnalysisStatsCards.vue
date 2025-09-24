@@ -132,11 +132,11 @@
             <div class="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <span style="color: var(--text-muted);">Pod数:</span>
-                <span class="ml-1 font-medium" style="color: var(--text-primary);">{{ ns.pod_count }}</span>
+                <span class="ml-1 font-medium" style="color: var(--text-primary);">{{ ns.total_pods }}</span>
               </div>
               <div>
                 <span style="color: var(--text-muted);">运行中:</span>
-                <span class="ml-1 font-medium" style="color: var(--success-color);">{{ ns.running_pods }}</span>
+                <span class="ml-1 font-medium" style="color: var(--success-color);">{{ getRunningPods(ns) }}</span>
               </div>
             </div>
           </div>
@@ -163,8 +163,18 @@ interface Pod {
 interface NamespaceSummary {
   cluster_name: string
   namespace_name: string
-  pod_count: number
-  running_pods: number
+  total_pods: number  // 后端使用 total_pods，前端需要适配
+  unreasonable_pods: number
+  total_memory_usage: number
+  total_cpu_usage: number
+  total_memory_request: number
+  total_cpu_request: number
+}
+
+// 计算运行中的Pod数量（用于向后兼容）
+const getRunningPods = (summary: NamespaceSummary): number => {
+  // 假设运行中的Pod数量 = 总Pod数量 - 有问题的Pod数量
+  return Math.max(0, summary.total_pods - (summary.unreasonable_pods || 0))
 }
 
 // 定义props接口

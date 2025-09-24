@@ -336,12 +336,13 @@ export function useAnalysis() {
       const response = await api.get<ApiResponse<any>>('/statistics/top-memory-request', {
         params: { limit }
       })
-      // 确保返回的数据是数组格式
-      if (response.data && Array.isArray(response.data.data)) {
-        topMemoryPods.value = response.data.data
+      // 处理嵌套的数据结构：response.data.data.data
+      if (response.data && response.data.data && Array.isArray(response.data.data.data)) {
+        topMemoryPods.value = response.data.data.data
+        console.log('✓ Top内存Pod数据获取成功:', response.data.data.data.length, '条记录')
       } else {
         topMemoryPods.value = []
-        console.warn('Top内存Pod数据格式异常，使用空数组')
+        console.warn('Top内存Pod数据格式异常，后端返回结构:', response.data)
       }
       return response.data
     } catch (err) {
@@ -356,12 +357,13 @@ export function useAnalysis() {
       const response = await api.get<ApiResponse<any>>('/statistics/top-cpu-request', {
         params: { limit }
       })
-      // 确保返回的数据是数组格式
-      if (response.data && Array.isArray(response.data.data)) {
-        topCpuPods.value = response.data.data
+      // 处理嵌套的数据结构：response.data.data.data
+      if (response.data && response.data.data && Array.isArray(response.data.data.data)) {
+        topCpuPods.value = response.data.data.data
+        console.log('✓ Top CPU Pod数据获取成功:', response.data.data.data.length, '条记录')
       } else {
         topCpuPods.value = []
-        console.warn('Top CPU Pod数据格式异常，使用空数组')
+        console.warn('Top CPU Pod数据格式异常，后端返回结构:', response.data)
       }
       return response.data
     } catch (err) {
@@ -374,12 +376,13 @@ export function useAnalysis() {
   const fetchNamespaceSummary = async () => {
     try {
       const response = await api.get<ApiResponse<any>>('/statistics/namespace-summary')
-      // 确保返回的数据是数组格式
-      if (response.data && Array.isArray(response.data.data)) {
-        namespaceSummary.value = response.data.data
+      // 处理嵌套的数据结构：response.data.data.data
+      if (response.data && response.data.data && Array.isArray(response.data.data.data)) {
+        namespaceSummary.value = response.data.data.data
+        console.log('✓ 命名空间汇总数据获取成功:', response.data.data.data.length, '条记录')
       } else {
         namespaceSummary.value = []
-        console.warn('命名空间汇总数据格式异常，使用空数组')
+        console.warn('命名空间汇总数据格式异常，后端返回结构:', response.data)
       }
       return response.data
     } catch (err) {
