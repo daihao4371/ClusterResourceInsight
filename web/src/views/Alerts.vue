@@ -127,23 +127,23 @@
         </div>
 
         <!-- 告警去重 -->
-        <div class="p-4 border rounded-lg border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20">
+        <div class="p-4 border rounded-lg border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20">
           <div class="flex items-center mb-2">
-            <div class="w-3 h-3 bg-orange-500 rounded-full mr-2"></div>
-            <h4 class="font-medium text-orange-700 dark:text-orange-300">告警降噪</h4>
+            <div class="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+            <h4 class="font-medium text-green-700 dark:text-green-300">告警降噪</h4>
           </div>
-          <button @click="executeDeduplication" 
-                  :disabled="testLoading.deduplicate"
-                  class="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-orange-400 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded transition-colors text-sm shadow-md hover:shadow-lg">
-            <div class="flex items-center justify-center">
-              <svg v-if="testLoading.deduplicate" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          <div class="text-center p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+            <div class="flex items-center justify-center text-green-600 dark:text-green-400 mb-1">
+              <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
               </svg>
-              <span>{{ testLoading.deduplicate ? '去重中...' : '执行去重' }}</span>
+              <span class="text-sm font-medium">自动降噪</span>
             </div>
-          </button>
-          <div v-if="lastDeduplicationResult" class="mt-2 text-xs text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-800/30 px-2 py-1 rounded">
+            <div class="text-xs text-green-600 dark:text-green-400">
+              系统已启用自动去重功能，页面刷新时自动执行
+            </div>
+          </div>
+          <div v-if="lastDeduplicationResult" class="mt-2 text-xs text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-800/30 px-2 py-1 rounded">
             ✅ 上次去重: 删除 {{ lastDeduplicationResult.removed_count }} 条重复记录
           </div>
         </div>
@@ -163,7 +163,7 @@
                    class="w-16 px-2 py-1 border border-red-300 dark:border-red-600 rounded text-xs focus:ring-2 focus:ring-red-500 focus:border-red-500">
             <span class="text-xs text-red-600 dark:text-red-400">天前数据将被删除</span>
           </div>
-          <button @click="executeCleanup" 
+          <button @click="showCleanupConfirm" 
                   :disabled="testLoading.cleanup"
                   class="w-full bg-red-500 hover:bg-red-600 disabled:bg-red-400 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded transition-colors text-sm shadow-md hover:shadow-lg">
             <div class="flex items-center justify-center">
@@ -338,6 +338,56 @@
       </div>
     </div>
 
+    <!-- 数据清理确认弹窗 -->
+    <div v-if="showCleanupConfirmModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click="closeCleanupConfirm">
+      <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md m-4" @click.stop>
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">确认数据清理</h3>
+          <button @click="closeCleanupConfirm" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+            ✕
+          </button>
+        </div>
+        
+        <div class="mb-6">
+          <div class="flex items-center p-4 mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <svg class="w-5 h-5 text-red-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+            </svg>
+            <div>
+              <h4 class="text-sm font-semibold text-red-800 dark:text-red-300">⚠️ 危险操作警告</h4>
+              <p class="text-sm text-red-700 dark:text-red-400 mt-1">此操作将永久删除历史数据，无法恢复！</p>
+            </div>
+          </div>
+          
+          <div class="space-y-2 text-sm text-gray-600 dark:text-gray-300">
+            <p><strong>清理范围：</strong>{{ retentionDays }} 天前的所有活动和告警数据</p>
+            <p><strong>预估影响：</strong>可能删除大量历史记录</p>
+            <p><strong>建议：</strong>请确保已备份重要数据</p>
+          </div>
+        </div>
+        
+        <div class="flex space-x-3">
+          <button 
+            @click="confirmCleanup"
+            :disabled="testLoading.cleanup"
+            class="flex-1 bg-red-500 hover:bg-red-600 disabled:bg-red-400 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded transition-colors">
+            <div class="flex items-center justify-center">
+              <svg v-if="testLoading.cleanup" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>{{ testLoading.cleanup ? '清理中...' : '确认清理' }}</span>
+            </div>
+          </button>
+          <button 
+            @click="closeCleanupConfirm"
+            class="flex-1 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-white font-medium py-2 px-4 rounded transition-colors">
+            取消
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 告警详情模态框 -->
     <AlertDetailsModal
       :visible="showDetailsModal"
@@ -367,6 +417,7 @@ const pageSize = ref(10)
 // 模态框相关状态
 const showDetailsModal = ref(false)
 const selectedAlert = ref(null)
+const showCleanupConfirmModal = ref(false)
 
 // 状态和级别映射
 const statusMap = {
@@ -429,6 +480,9 @@ const refreshAlerts = async () => {
     // 获取告警数据
     await systemStore.fetchSystemAlerts()
     alerts.value = systemStore.systemAlerts
+    
+    // 数据刷新后自动执行去重
+    await executeDeduplicationSilently()
   } catch (error) {
     console.error('获取告警数据失败:', error)
   } finally {
@@ -521,10 +575,9 @@ const showTestPanel = ref(true) // 默认显示测试面板，方便前后端联
 const databaseStats = ref(null)
 const testLoading = ref({
   stats: false,
-  deduplicate: false,
   cleanup: false
 })
-const testLogs = ref([])
+const testLogs = ref<Array<{level: string, message: string, timestamp: Date}>>([])
 const retentionDays = ref(7) // 数据清理保留天数
 const lastDeduplicationResult = ref(null)
 const lastCleanupResult = ref(null)
@@ -554,32 +607,23 @@ const fetchDatabaseStats = async () => {
   }
 }
 
-const executeDeduplication = async () => {
-  testLoading.value.deduplicate = true
-  try {
-    const response = await fetch('/api/alerts/deduplicate', {
-      method: 'POST'
-    })
-    const result = await response.json()
-    
-    if (result.code === 0) {
-      lastDeduplicationResult.value = result.data
-      addTestLog('success', `告警去重完成 - 删除: ${result.data.removed_count}条, 保留: ${result.data.success_count}条`)
-      // 更新数据库统计
-      await fetchDatabaseStats()
-      // 刷新告警列表
-      await refreshAlerts()
-    } else {
-      throw new Error(result.msg)
-    }
-  } catch (error) {
-    addTestLog('error', `告警去重失败: ${error.message}`)
-    console.error('告警去重失败:', error)
-  } finally {
-    testLoading.value.deduplicate = false
-  }
+// 显示数据清理确认弹窗
+const showCleanupConfirm = () => {
+  showCleanupConfirmModal.value = true
 }
 
+// 关闭数据清理确认弹窗
+const closeCleanupConfirm = () => {
+  showCleanupConfirmModal.value = false
+}
+
+// 确认执行数据清理
+const confirmCleanup = async () => {
+  await executeCleanup()
+  closeCleanupConfirm()
+}
+
+// 实际执行数据清理的方法
 const executeCleanup = async () => {
   testLoading.value.cleanup = true
   try {
@@ -606,7 +650,7 @@ const executeCleanup = async () => {
   }
 }
 
-const addTestLog = (level, message) => {
+const addTestLog = (level: string, message: string) => {
   testLogs.value.unshift({
     level,
     message,
@@ -623,7 +667,7 @@ const clearTestLogs = () => {
   testLogs.value = []
 }
 
-const getLogClass = (level) => {
+const getLogClass = (level: string) => {
   switch (level) {
     case 'success':
       return 'text-green-600'
@@ -636,7 +680,7 @@ const getLogClass = (level) => {
   }
 }
 
-const formatLogTime = (timestamp) => {
+const formatLogTime = (timestamp: Date) => {
   return timestamp.toLocaleTimeString('zh-CN', { 
     hour12: false, 
     hour: '2-digit', 
@@ -645,10 +689,34 @@ const formatLogTime = (timestamp) => {
   })
 }
 
+// 静默执行告警去重，不影响用户界面
+const executeDeduplicationSilently = async () => {
+  try {
+    const response = await fetch('/api/alerts/deduplicate', {
+      method: 'POST'
+    })
+    const result = await response.json()
+    
+    if (result.code === 0) {
+      lastDeduplicationResult.value = result.data
+      addTestLog('success', `自动去重完成 - 删除: ${result.data.removed_count}条, 保留: ${result.data.success_count}条`)
+      // 更新数据库统计
+      await fetchDatabaseStats()
+    } else {
+      throw new Error(result.msg)
+    }
+  } catch (error: any) {
+    addTestLog('warning', `自动去重失败: ${error.message}`)
+    console.warn('自动去重失败:', error)
+  }
+}
+
 // 生命周期
 onMounted(() => {
   refreshAlerts()
   // 初始化时获取数据库统计信息
   fetchDatabaseStats()
+  // 初始化完成后自动执行一次去重
+  executeDeduplicationSilently()
 })
 </script>
