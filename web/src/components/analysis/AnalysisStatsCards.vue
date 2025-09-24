@@ -1,12 +1,17 @@
 <template>
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Top内存请求Pod -->
-    <div class="glass-card">
-      <div class="p-6 border-b border-gray-700">
+    <div class="glass-card bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-300">
+      <div class="p-6 border-b border-gray-200 dark:border-gray-700">
         <div class="flex items-center justify-between">
-          <h3 class="text-lg font-semibold">Top内存请求Pod</h3>
+          <div class="flex items-center space-x-3">
+            <div class="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+              <Database class="w-5 h-5 text-green-600 dark:text-green-400" />
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Top内存请求Pod</h3>
+          </div>
           <button 
-            class="btn-secondary text-sm"
+            class="btn-secondary text-sm hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
             @click="$emit('refresh-memory')"
             :disabled="loading"
           >
@@ -16,23 +21,23 @@
         </div>
       </div>
       <div class="p-4 max-h-80 overflow-y-auto">
-        <div v-if="!topMemoryPods || topMemoryPods.length === 0" class="text-center py-8 text-gray-500">
-          <Database class="w-8 h-8 mx-auto mb-2" />
+        <div v-if="!topMemoryPods || topMemoryPods.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
+          <Database class="w-8 h-8 mx-auto mb-2 text-gray-400 dark:text-gray-500" />
           <p>暂无数据</p>
         </div>
         <div v-else class="space-y-3">
           <div 
             v-for="pod in topMemoryPods.slice(0, 10)"
             :key="`memory-${pod.cluster_name}-${pod.namespace}-${pod.pod_name}`"
-            class="flex items-center justify-between p-3 bg-dark-800/30 rounded-lg"
+            class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600/40 hover:border-gray-300 dark:hover:border-gray-500/60 hover:bg-gray-100 dark:hover:bg-gray-600/40 transition-all duration-200"
           >
             <div class="flex-1 min-w-0">
-              <div class="font-medium text-sm truncate">{{ pod.pod_name }}</div>
-              <div class="text-xs text-gray-400">{{ pod.namespace }}</div>
+              <div class="font-medium text-sm truncate text-gray-900 dark:text-gray-100">{{ pod.pod_name }}</div>
+              <div class="text-xs text-gray-600 dark:text-gray-400">{{ pod.namespace }}</div>
             </div>
             <div class="text-right">
-              <div class="text-sm font-medium">{{ formatMemoryValue(pod.memory_request) }}</div>
-              <div class="text-xs text-gray-500">请求量</div>
+              <div class="text-sm font-semibold text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded">{{ formatMemoryValue(pod.memory_request) }}</div>
+              <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">请求量</div>
             </div>
           </div>
         </div>
@@ -40,12 +45,17 @@
     </div>
 
     <!-- Top CPU请求Pod -->
-    <div class="glass-card">
-      <div class="p-6 border-b border-gray-700">
+    <div class="glass-card bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-300">
+      <div class="p-6 border-b border-gray-200 dark:border-gray-700">
         <div class="flex items-center justify-between">
-          <h3 class="text-lg font-semibold">Top CPU请求Pod</h3>
+          <div class="flex items-center space-x-3">
+            <div class="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
+              <Cpu class="w-5 h-5 text-orange-600 dark:text-orange-400" />
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Top CPU请求Pod</h3>
+          </div>
           <button 
-            class="btn-secondary text-sm"
+            class="btn-secondary text-sm hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
             @click="$emit('refresh-cpu')"
             :disabled="loading"
           >
@@ -55,23 +65,23 @@
         </div>
       </div>
       <div class="p-4 max-h-80 overflow-y-auto">
-        <div v-if="!topCpuPods || topCpuPods.length === 0" class="text-center py-8 text-gray-500">
-          <Cpu class="w-8 h-8 mx-auto mb-2" />
+        <div v-if="!topCpuPods || topCpuPods.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
+          <Cpu class="w-8 h-8 mx-auto mb-2 text-gray-400 dark:text-gray-500" />
           <p>暂无数据</p>
         </div>
         <div v-else class="space-y-3">
           <div 
             v-for="pod in topCpuPods.slice(0, 10)"
             :key="`cpu-${pod.cluster_name}-${pod.namespace}-${pod.pod_name}`"
-            class="flex items-center justify-between p-3 bg-dark-800/30 rounded-lg"
+            class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600/40 hover:border-gray-300 dark:hover:border-gray-500/60 hover:bg-gray-100 dark:hover:bg-gray-600/40 transition-all duration-200"
           >
             <div class="flex-1 min-w-0">
-              <div class="font-medium text-sm truncate">{{ pod.pod_name }}</div>
-              <div class="text-xs text-gray-400">{{ pod.namespace }}</div>
+              <div class="font-medium text-sm truncate text-gray-900 dark:text-gray-100">{{ pod.pod_name }}</div>
+              <div class="text-xs text-gray-600 dark:text-gray-400">{{ pod.namespace }}</div>
             </div>
             <div class="text-right">
-              <div class="text-sm font-medium">{{ formatCpuValue(pod.cpu_request) }}</div>
-              <div class="text-xs text-gray-500">请求量</div>
+              <div class="text-sm font-semibold text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/30 px-2 py-1 rounded">{{ formatCpuValue(pod.cpu_request) }}</div>
+              <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">请求量</div>
             </div>
           </div>
         </div>
