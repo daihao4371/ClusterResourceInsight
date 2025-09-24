@@ -11,7 +11,7 @@ import (
 // SetupRoutes 设置所有API路由 - 将路由配置从handlers.go中分离出来
 func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollector) {
 	// 直接复制原handlers.go中的路由配置逻辑，但调用api包中的处理器函数
-	
+
 	// 原有的分析接口
 	r.GET("/analysis", api.GetResourceAnalysis(resourceCollector))
 	r.GET("/pods", api.GetPodsData(resourceCollector))
@@ -44,7 +44,7 @@ func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollec
 		podsGroup.GET("/list", api.ListPods(multiCollector))
 		podsGroup.GET("/problems", api.GetProblemsWithPagination(multiCollector))
 		podsGroup.GET("/filter-options", api.GetFilterOptions(multiCollector)) // 新增筛选选项接口
-		
+
 		// Pod详细分析接口
 		podsGroup.GET("/:cluster/:namespace/:pod/detail", api.GetPodDetailAnalysis(multiCollector))
 		podsGroup.GET("/:cluster/:namespace/:pod/trend", api.GetPodTrendData(multiCollector))
@@ -80,6 +80,19 @@ func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollec
 	{
 		activitiesGroup.GET("/recent", api.GetRecentActivities(activityService))
 		activitiesGroup.DELETE("/cleanup", api.CleanupOldActivitiesAndAlerts(activityService))
+
+		// 活动优化相关接口
+		optimizationGroup := activitiesGroup.Group("/optimization")
+		{
+			optimizationGroup.GET("/config", api.GetOptimizationConfig(activityService))
+			optimizationGroup.PUT("/config", api.UpdateOptimizationConfig(activityService))
+			optimizationGroup.POST("/execute", api.ExecuteOptimization(activityService))
+		}
+
+		// 活动统计接口
+		activitiesGroup.GET("/stats", api.GetActivityStats(activityService))
+		// 数据库统计接口 - 供前端联调查看数据状态
+		activitiesGroup.GET("/database-stats", api.GetDatabaseStats(activityService))
 	}
 
 	alertsGroup := r.Group("/alerts")
@@ -89,6 +102,7 @@ func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollec
 		alertsGroup.PUT("/:id/resolve", api.ResolveAlert(activityService))
 		alertsGroup.PUT("/:id/dismiss", api.DismissAlert(activityService))
 		alertsGroup.GET("/:id", api.GetAlertDetails(activityService))
+		alertsGroup.POST("/deduplicate", api.DeduplicateAlerts(activityService))
 	}
 
 	// 集群管理接口

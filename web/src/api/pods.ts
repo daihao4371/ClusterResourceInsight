@@ -1,5 +1,14 @@
 import { ApiResponse, PaginationParams, PaginationResponse } from './types'
 
+// 扩展 ImportMeta 类型以支持 Vite 环境变量
+declare global {
+  interface ImportMeta {
+    readonly env: {
+      readonly PROD: boolean
+    }
+  }
+}
+
 // Pod相关的数据类型定义 - 与后端PodResourceInfo对齐
 export interface Pod {
   // 基础信息
@@ -162,7 +171,7 @@ export interface PodsListResponse extends PaginationResponse<Pod> {
 }
 
 // API基础URL
-const API_BASE_URL = typeof process !== 'undefined' && process.env.NODE_ENV === 'production' 
+const API_BASE_URL = import.meta.env.PROD
   ? '/api' 
   : 'http://localhost:9999/api'
 

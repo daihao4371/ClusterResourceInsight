@@ -15,15 +15,26 @@ export const useSystemStore = defineStore('system', () => {
   const activitiesLoading = ref(false)
   const alertsLoading = ref(false)
   const error = ref<string | null>(null)
+  
+  // 集群相关状态
+  const currentCluster = ref<string>('') // 当前选中的集群ID
 
   // 获取系统统计信息
-  const fetchStats = async () => {
+  const fetchStats = async (clusterId?: string) => {
     loading.value = true
     error.value = null
     
     try {
-      // 调用新的统计接口
-      const statsRes = await api.get('/stats')
+      // 构建URL，支持集群筛选
+      let url = '/stats'
+      if (clusterId && clusterId !== '') {
+        url += `?cluster_id=${encodeURIComponent(clusterId)}`
+      }
+      
+      console.log('调用统计API:', url, '集群ID:', clusterId)
+      
+      // 调用统计接口
+      const statsRes = await api.get(url)
       
       // 直接使用统计接口返回的数据
       stats.value = {
@@ -35,6 +46,14 @@ export const useSystemStore = defineStore('system', () => {
         cluster_status_distribution: statsRes.data?.data?.cluster_status_distribution || [],
         last_update: statsRes.data?.data?.last_update || new Date().toISOString()
       }
+      
+      console.log('统计数据获取成功:', {
+        集群参数: clusterId || '全部集群',
+        总集群数: stats.value.total_clusters,
+        在线集群: stats.value.online_clusters,
+        总Pod数: stats.value.total_pods,
+        问题Pod数: stats.value.problem_pods
+      })
     } catch (err: any) {
       error.value = err.message || '获取系统统计信息失败'
       console.error('Failed to fetch system stats:', err)
@@ -44,15 +63,42 @@ export const useSystemStore = defineStore('system', () => {
   }
 
   // 获取系统趋势数据
-  const fetchTrendData = async (hours: number = 24) => {
+  const fetchTrendData = async (hours: number = 24, clusterId?: string) => {
     trendLoading.value = true
     
     try {
-      const response = await api.get(`/history/system-trends?hours=${hours}`)
+      // 构建URL，支持集群筛选
+      let url = `/history/system-trends?hours=${hours}`
+      if (clusterId && clusterId !== '') {
+        url += `&cluster_id=${encodeURIComponent(clusterId)}`
+      }
       
-      if (response.data?.code === 0 && response.data?.data?.data) {
-        trendData.value = response.data.data.data
+      console.log('调用趋势数据API:', url)
+      
+      const response = await api.get(url)
+      
+      // 调试日志
+      console.log('趋势数据API响应:', response.data)
+      
+      if (response.data?.code === 0 && response.data?.data) {
+        // 检查数据格式，支持多种可能的响应结构
+        let trendDataArray = response.data.data
+        
+        // 如果data是包装对象，进一步提取
+        if (trendDataArray.data && Array.isArray(trendDataArray.data)) {
+          trendDataArray = trendDataArray.data
+        }
+        
+        // 确保是数组格式
+        if (Array.isArray(trendDataArray) && trendDataArray.length > 0) {
+          trendData.value = trendDataArray
+          console.log('成功解析趋势数据:', trendDataArray.length, '条记录')
+        } else {
+          console.warn('后端返回的趋势数据格式异常，使用模拟数据')
+          trendData.value = generateMockTrendData(hours)
+        }
       } else {
+        console.warn('趋势数据API响应格式异常:', response.data)
         // 如果后端返回空数据，使用模拟数据确保图表正常显示
         trendData.value = generateMockTrendData(hours)
       }
@@ -189,10 +235,11 @@ export const useSystemStore = defineStore('system', () => {
   }
 
   // 刷新所有数据
-  const refreshAllData = async () => {
+  const refreshAllData = async (clusterId?: string) => {
+    console.log('刷新所有数据，集群ID:', clusterId)
     await Promise.all([
-      fetchStats(),
-      fetchTrendData(24),
+      fetchStats(clusterId),
+      fetchTrendData(24, clusterId),
       fetchRealtimeActivities(),
       fetchSystemAlerts()
     ])
@@ -237,6 +284,12 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
+  // 设置当前集群
+  const setCurrentCluster = (clusterId: string) => {
+    currentCluster.value = clusterId
+    console.log('设置当前集群:', clusterId || '全部集群')
+  }
+
   return {
     // 状态
     stats,
@@ -249,6 +302,7 @@ export const useSystemStore = defineStore('system', () => {
     activitiesLoading,
     alertsLoading,
     error,
+    currentCluster,
     
     // 方法
     fetchStats,
@@ -262,6 +316,7 @@ export const useSystemStore = defineStore('system', () => {
     refreshAllData,
     resolveAlert,
     dismissAlert,
-    updateAlertStatus
+    updateAlertStatus,
+    setCurrentCluster
   }
 })

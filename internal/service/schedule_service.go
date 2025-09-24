@@ -536,14 +536,113 @@ func (ss *ScheduleService) performMaintenance(ctx context.Context) {
 		logger.Error("重新加载集群配置失败: %v", err)
 	}
 
-	// 清理过期数据（如果启用）
-	if ss.globalSettings.EnablePersistence && ss.historyService != nil {
-		if err := ss.historyService.CleanupOldData(ctx, 30); err != nil {
-			logger.Error("清理过期数据失败: %v", err)
-		}
+	// 执行自动化系统验证和维护
+	if err := ss.performSystemValidationAndMaintenance(ctx); err != nil {
+		logger.Error("系统验证和维护失败: %v", err)
 	}
 
 	logger.Info("调度服务维护任务完成")
+}
+
+// performSystemValidationAndMaintenance 执行系统验证和维护任务
+func (ss *ScheduleService) performSystemValidationAndMaintenance(ctx context.Context) error {
+	activityService := NewActivityService()
+
+	// 1. 获取维护前的系统统计
+	initialStats, err := activityService.GetDatabaseStats()
+	if err != nil {
+		logger.Error("获取初始系统统计失败: %v", err)
+		return err
+	}
+
+	logger.Info("维护前系统统计 - 活动: %d, 告警: %d, 重复告警: %d",
+		initialStats["total_activities"],
+		initialStats["total_alerts"],
+		initialStats["duplicate_alerts"])
+
+	// 2. 执行告警去重清理并验证效果
+	deduplicationResult, err := activityService.CleanupDuplicateAlerts(ctx)
+	if err != nil {
+		logger.Error("告警去重清理失败: %v", err)
+	} else {
+		logger.Info("告警去重完成 - 删除了 %d 条重复记录，耗时 %v",
+			deduplicationResult.RemovedCount, deduplicationResult.Duration)
+
+		// 验证去重效果
+		if deduplicationResult.RemovedCount > 0 {
+			activityService.RecordSystemEvent("success", "自动告警去重",
+				fmt.Sprintf("系统自动去重删除了 %d 条重复告警记录", deduplicationResult.RemovedCount),
+				map[string]interface{}{
+					"removed_count": deduplicationResult.RemovedCount,
+					"duration_ms":   deduplicationResult.Duration.Milliseconds(),
+				})
+		}
+	}
+
+	// 3. 执行数据清理（保留30天数据）
+	cleanupResult, err := activityService.CleanupOldActivitiesWithStats(ctx, 30)
+	if err != nil {
+		logger.Error("数据清理失败: %v", err)
+	} else {
+		logger.Info("数据清理完成 - 活动: %d→%d (删除%d), 告警: %d→%d (删除%d), 耗时: %v",
+			cleanupResult.ActivitiesBefore, cleanupResult.ActivitiesAfter, cleanupResult.RemovedActivities,
+			cleanupResult.AlertsBefore, cleanupResult.AlertsAfter, cleanupResult.RemovedAlerts,
+			cleanupResult.Duration)
+
+		// 记录清理结果
+		if cleanupResult.RemovedActivities > 0 || cleanupResult.RemovedAlerts > 0 {
+			activityService.RecordSystemEvent("info", "自动数据清理",
+				fmt.Sprintf("清理了 %d 个活动和 %d 个告警记录",
+					cleanupResult.RemovedActivities, cleanupResult.RemovedAlerts),
+				map[string]interface{}{
+					"retention_days":     cleanupResult.RetentionDays,
+					"removed_activities": cleanupResult.RemovedActivities,
+					"removed_alerts":     cleanupResult.RemovedAlerts,
+					"duration_ms":        cleanupResult.Duration.Milliseconds(),
+				})
+		}
+	}
+
+	// 4. 获取维护后的系统统计并验证
+	finalStats, err := activityService.GetDatabaseStats()
+	if err != nil {
+		logger.Error("获取最终系统统计失败: %v", err)
+	} else {
+		logger.Info("维护后系统统计 - 活动: %d, 告警: %d, 重复告警: %d",
+			finalStats["total_activities"],
+			finalStats["total_alerts"],
+			finalStats["duplicate_alerts"])
+
+		// 验证维护效果
+		initialDuplicates := initialStats["duplicate_alerts"].(int64)
+		finalDuplicates := finalStats["duplicate_alerts"].(int64)
+
+		if finalDuplicates < initialDuplicates {
+			logger.Info("✓ 告警降噪验证通过: 重复告警从 %d 减少到 %d", initialDuplicates, finalDuplicates)
+		} else if finalDuplicates == 0 {
+			logger.Info("✓ 告警降噪验证通过: 无重复告警")
+		}
+
+		// 记录维护总结
+		activityService.RecordSystemEvent("success", "系统维护完成",
+			"自动化系统维护和验证完成",
+			map[string]interface{}{
+				"initial_stats":         initialStats,
+				"final_stats":           finalStats,
+				"maintenance_effective": finalDuplicates < initialDuplicates,
+			})
+	}
+
+	// 5. 历史数据清理（如果启用）
+	if ss.globalSettings.EnablePersistence && ss.historyService != nil {
+		if err := ss.historyService.CleanupOldData(ctx, 30); err != nil {
+			logger.Error("清理历史数据失败: %v", err)
+		} else {
+			logger.Info("历史数据清理完成")
+		}
+	}
+
+	return nil
 }
 
 func (ss *ScheduleService) reloadClusterJobs(ctx context.Context) error {

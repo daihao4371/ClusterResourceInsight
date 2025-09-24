@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cluster-resource-insight/internal/models"
 	"strconv"
 	"time"
 
@@ -21,25 +22,70 @@ func HealthCheck(c *gin.Context) {
 	}, c)
 }
 
-// GetSystemStats 获取系统统计数据 - 提供Dashboard页面所需的统计数据
+// GetSystemStats 获取系统统计数据 - 提供Dashboard页面所需的统计数据，支持按集群筛选
 func GetSystemStats(resourceCollector *collector.ResourceCollector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger.Info("获取系统统计数据...")
+
+		// 获取集群ID参数用于筛选
+		clusterIDStr := c.Query("cluster_id")
+		var targetClusterID *uint
+		if clusterIDStr != "" {
+			if id, err := strconv.ParseUint(clusterIDStr, 10, 32); err == nil {
+				clusterID := uint(id)
+				targetClusterID = &clusterID
+			}
+		}
 
 		// 使用多集群收集器获取完整的统计数据
 		multiCollector := collector.NewMultiClusterResourceCollector()
 
 		// 并行获取集群和分析数据
 		clusterService := service.NewClusterService()
-		clusters, err := clusterService.GetAllClusters()
+		allClusters, err := clusterService.GetAllClusters()
 		if err != nil {
 			logger.Error("获取集群列表失败: %v", err)
 			response.InternalServerError(err.Error(), c)
 			return
 		}
 
+		// 根据筛选条件确定要分析的集群
+		var clustersToAnalyze []models.ClusterConfig
+		if targetClusterID != nil {
+			// 筛选特定集群
+			for _, cluster := range allClusters {
+				if cluster.ID == *targetClusterID {
+					clustersToAnalyze = []models.ClusterConfig{cluster}
+					break
+				}
+			}
+			if len(clustersToAnalyze) == 0 {
+				logger.Error("指定的集群ID不存在: %d", *targetClusterID)
+				response.BadRequest("指定的集群不存在", c)
+				return
+			}
+		} else {
+			// 分析所有集群
+			clustersToAnalyze = allClusters
+		}
+
 		// 获取资源分析数据
-		analysisResult, err := multiCollector.CollectAllClustersData(c.Request.Context())
+		var analysisResult *collector.AnalysisResult
+		if targetClusterID != nil {
+			// 针对特定集群获取数据
+			analysisResult, err = multiCollector.CollectSpecificClusterData(c.Request.Context(), *targetClusterID)
+			// 更新要分析的集群列表为该特定集群
+			if err == nil {
+				cluster, clusterErr := clusterService.GetClusterByID(*targetClusterID)
+				if clusterErr == nil {
+					clustersToAnalyze = []models.ClusterConfig{*cluster}
+				}
+			}
+		} else {
+			// 获取所有集群的聚合数据
+			analysisResult, err = multiCollector.CollectAllClustersData(c.Request.Context())
+		}
+
 		if err != nil {
 			logger.Error("获取资源分析数据失败: %v", err)
 			// 如果分析数据获取失败，仍然返回基础统计信息
@@ -54,10 +100,10 @@ func GetSystemStats(resourceCollector *collector.ResourceCollector) gin.HandlerF
 
 		// 使用统计构建器构建响应数据
 		statsBuilder := statistics.NewSystemStatsBuilder()
-		stats := statsBuilder.BuildSystemStats(clusters, analysisResult)
+		stats := statsBuilder.BuildSystemStats(clustersToAnalyze, analysisResult)
 
 		logger.Info("系统统计数据获取完成: clusters=%d, online=%d, pods=%d, problems=%d",
-			len(clusters), stats["online_clusters"], analysisResult.TotalPods, analysisResult.UnreasonablePods)
+			len(clustersToAnalyze), stats["online_clusters"], analysisResult.TotalPods, analysisResult.UnreasonablePods)
 
 		response.OkWithData(stats, c)
 	}

@@ -60,7 +60,7 @@ export function useClusters() {
     try {
       loading.value = true
       const response = await api.put<ApiResponse<Cluster>>(`/clusters/${id}`, clusterData)
-      const index = clusters.value.findIndex(c => c.id === id)
+      const index = clusters.value.findIndex(c => Number(c.id) === id)
       if (index !== -1) {
         clusters.value[index] = response.data.data
       }
@@ -77,7 +77,7 @@ export function useClusters() {
     try {
       loading.value = true
       await api.delete(`/clusters/${id}`)
-      clusters.value = clusters.value.filter(c => c.id !== id)
+      clusters.value = clusters.value.filter(c => Number(c.id) !== id)
     } catch (err) {
       error.value = err instanceof Error ? err.message : '删除集群失败'
       throw err
@@ -157,7 +157,7 @@ export function usePods() {
  * 历史数据获取
  */
 export function useHistory() {
-  const history = ref([])
+  const history = ref<any[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
   const total = ref(0)
@@ -225,10 +225,10 @@ export function useAnalysis() {
       const response = await api.get<ApiResponse<any>>('/analysis', { params })
       
       // 处理新的分页响应格式
-      if (response.data.data && response.data.pagination) {
+      if (response.data.data && (response.data as any).pagination) {
         analysis.value = response.data.data
-        pagination.value = response.data.pagination
-        filters.value.cluster_name = response.data.filter?.cluster_name || ''
+        pagination.value = (response.data as any).pagination
+        filters.value.cluster_name = (response.data as any).filter?.cluster_name || ''
       } else {
         // 兼容旧格式
         analysis.value = response.data.data || response.data
@@ -520,7 +520,7 @@ export function useStats() {
  * 调度任务数据获取
  */
 export function useSchedule() {
-  const jobs = ref([])
+  const jobs = ref<any[]>([])
   const settings = ref(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -616,5 +616,226 @@ export function useRefresh() {
   return {
     refreshing: computed(() => refreshing.value),
     refresh
+  }
+}
+
+/**
+ * 活动优化配置管理
+ */
+export function useActivityOptimization() {
+  const config = ref(null)
+  const optimizationResult = ref(null)
+  const loading = ref(false)
+  const error = ref<string | null>(null)
+
+  // 获取优化配置
+  const fetchOptimizationConfig = async () => {
+    try {
+      loading.value = true
+      error.value = null
+      const response = await api.get<ApiResponse<any>>('/activities/optimization/config')
+      config.value = response.data.data
+      return response.data.data
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '获取优化配置失败'
+      console.error('获取优化配置失败:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 更新优化配置
+  const updateOptimizationConfig = async (newConfig: any) => {
+    try {
+      loading.value = true
+      error.value = null
+      const response = await api.put<ApiResponse<any>>('/activities/optimization/config', newConfig)
+      config.value = response.data.data
+      return response.data.data
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '更新优化配置失败'
+      console.error('更新优化配置失败:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 执行活动优化
+  const executeOptimization = async () => {
+    try {
+      loading.value = true
+      error.value = null
+      const response = await api.post<ApiResponse<any>>('/activities/optimization/execute')
+      optimizationResult.value = response.data.data
+      return response.data.data
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '执行优化失败'
+      console.error('执行优化失败:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 获取活动统计
+  const getActivityStats = async (hours: number = 24) => {
+    try {
+      const response = await api.get<ApiResponse<any>>('/activities/stats', {
+        params: { hours }
+      })
+      return response.data.data
+    } catch (err) {
+      console.error('获取活动统计失败:', err)
+      throw err
+    }
+  }
+
+  // 获取数据库统计信息（集成性能监控和错误处理）
+  const getDatabaseStats = async () => {
+    const startTime = performance.now()
+    try {
+      const response = await api.get<ApiResponse<any>>('/activities/database-stats')
+      const duration = performance.now() - startTime
+      
+      // 性能监控
+      if (duration > 1000) {
+        console.warn(`数据库统计查询耗时过长: ${duration.toFixed(2)}ms`)
+      }
+      
+      // 数据验证
+      const stats = response.data.data
+      if (stats && typeof stats.total_activities !== 'number') {
+        console.warn('数据库统计返回格式异常:', stats)
+      }
+      
+      console.log(`✓ 数据库统计获取成功 (${duration.toFixed(2)}ms)`)
+      return stats
+    } catch (err: any) {
+      const duration = performance.now() - startTime
+      console.error(`✗ 获取数据库统计失败 (${duration.toFixed(2)}ms):`, err.message || err)
+      
+      // 错误处理：返回默认统计数据避免前端崩溃
+      return {
+        total_activities: 0,
+        total_alerts: 0,
+        duplicate_alerts: 0,
+        alert_status: { active: 0, resolved: 0, suppressed: 0 },
+        error: true,
+        error_message: err.message || '获取统计失败'
+      }
+    }
+  }
+
+  // 执行告警去重清理（集成性能监控和验证）
+  const deduplicateAlerts = async () => {
+    const startTime = performance.now()
+    try {
+      // 获取去重前的状态用于验证
+      const beforeStats = await getDatabaseStats()
+      const beforeDuplicates = beforeStats.duplicate_alerts || 0
+      
+      const response = await api.post<ApiResponse<any>>('/alerts/deduplicate')
+      const result = response.data.data
+      const duration = performance.now() - startTime
+      
+      // 性能监控
+      if (duration > 5000) {
+        console.warn(`告警去重操作耗时过长: ${duration.toFixed(2)}ms`)
+      }
+      
+      // 验证去重效果
+      if (result && result.removed_count > 0) {
+        console.log(`✓ 告警去重成功: 删除了 ${result.removed_count} 条重复记录 (${duration.toFixed(2)}ms)`)
+        
+        // 异步验证去重效果（不阻塞当前操作）
+        setTimeout(async () => {
+          try {
+            const afterStats = await getDatabaseStats()
+            const afterDuplicates = afterStats.duplicate_alerts || 0
+            if (afterDuplicates < beforeDuplicates) {
+              console.log(`✓ 去重效果验证通过: 重复告警从 ${beforeDuplicates} 减少到 ${afterDuplicates}`)
+            }
+          } catch (err) {
+            console.warn('去重效果验证失败:', err)
+          }
+        }, 1000)
+      }
+      
+      return result
+    } catch (err: any) {
+      const duration = performance.now() - startTime
+      console.error(`✗ 告警去重失败 (${duration.toFixed(2)}ms):`, err.message || err)
+      throw err
+    }
+  }
+
+  // 执行数据清理（集成性能监控和验证）
+  const cleanupOldData = async (retentionDays: number = 30, withStats: boolean = true) => {
+    const startTime = performance.now()
+    
+    // 参数验证
+    if (retentionDays < 0 || retentionDays > 365) {
+      throw new Error(`无效的保留天数: ${retentionDays}，应在 0-365 范围内`)
+    }
+    
+    try {
+      // 获取清理前的状态
+      const beforeStats = await getDatabaseStats()
+      
+      const response = await api.delete<ApiResponse<any>>('/activities/cleanup', {
+        params: { 
+          retention_days: retentionDays,
+          with_stats: withStats 
+        }
+      })
+      
+      const result = response.data.data || response.data.message
+      const duration = performance.now() - startTime
+      
+      // 性能监控
+      if (duration > 10000) {
+        console.warn(`数据清理操作耗时过长: ${duration.toFixed(2)}ms`)
+      }
+      
+      // 验证清理效果
+      if (result && typeof result === 'object' && result.removed_activities !== undefined) {
+        console.log(`✓ 数据清理成功: 活动-${result.removed_activities}, 告警-${result.removed_alerts} (${duration.toFixed(2)}ms)`)
+        
+        // 数据完整性验证
+        if (result.activities_after > result.activities_before) {
+          console.warn('数据清理异常: 清理后数据量增加了')
+        }
+      }
+      
+      return result
+    } catch (err: any) {
+      const duration = performance.now() - startTime
+      console.error(`✗ 数据清理失败 (${duration.toFixed(2)}ms):`, err.message || err)
+      
+      // 错误处理：根据错误类型提供不同的处理策略
+      if (err.response?.status === 404) {
+        throw new Error('清理接口不存在，请检查服务器配置')
+      } else if (err.response?.status === 500) {
+        throw new Error('服务器内部错误，请联系管理员')
+      } else {
+        throw err
+      }
+    }
+  }
+
+  return {
+    config: computed(() => config.value),
+    optimizationResult: computed(() => optimizationResult.value),
+    loading: computed(() => loading.value),
+    error: computed(() => error.value),
+    fetchOptimizationConfig,
+    updateOptimizationConfig,
+    executeOptimization,
+    getActivityStats,
+    getDatabaseStats,
+    deduplicateAlerts,
+    cleanupOldData
   }
 }
