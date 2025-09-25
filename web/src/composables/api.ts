@@ -26,12 +26,19 @@ export function useClusters() {
       loading.value = true
       error.value = null
       const response = await api.get<ApiResponse<any>>('/clusters')
-      // 确保返回的数据是数组格式
-      if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        clusters.value = response.data.data
+      
+      console.log('集群API原始响应数据:', response.data)
+      
+      // 确保返回的数据是数组格式 - 修复数据结构访问路径
+      if (response.data && response.data.data && response.data.data.data && Array.isArray(response.data.data.data)) {
+        clusters.value = response.data.data.data // 正确的数据路径：response.data.data.data
+        console.log('成功获取集群数据:', clusters.value.length, '个集群', clusters.value.map(c => c.cluster_name))
       } else {
         clusters.value = []
-        console.warn('集群数据格式异常，使用空数组')
+        console.warn('集群数据格式异常，期望的数据结构:', {
+          expectPath: 'response.data.data.data',
+          actualData: response.data
+        })
       }
     } catch (err) {
       error.value = err instanceof Error ? err.message : '获取集群数据失败'
@@ -336,12 +343,13 @@ export function useAnalysis() {
       const response = await api.get<ApiResponse<any>>('/statistics/top-memory-request', {
         params: { limit }
       })
-      // 确保返回的数据是数组格式
-      if (response.data && Array.isArray(response.data.data)) {
-        topMemoryPods.value = response.data.data
+      // 处理嵌套的数据结构：response.data.data.data
+      if (response.data && response.data.data && Array.isArray(response.data.data.data)) {
+        topMemoryPods.value = response.data.data.data
+        console.log('✓ Top内存Pod数据获取成功:', response.data.data.data.length, '条记录')
       } else {
         topMemoryPods.value = []
-        console.warn('Top内存Pod数据格式异常，使用空数组')
+        console.warn('Top内存Pod数据格式异常，后端返回结构:', response.data)
       }
       return response.data
     } catch (err) {
@@ -356,12 +364,13 @@ export function useAnalysis() {
       const response = await api.get<ApiResponse<any>>('/statistics/top-cpu-request', {
         params: { limit }
       })
-      // 确保返回的数据是数组格式
-      if (response.data && Array.isArray(response.data.data)) {
-        topCpuPods.value = response.data.data
+      // 处理嵌套的数据结构：response.data.data.data
+      if (response.data && response.data.data && Array.isArray(response.data.data.data)) {
+        topCpuPods.value = response.data.data.data
+        console.log('✓ Top CPU Pod数据获取成功:', response.data.data.data.length, '条记录')
       } else {
         topCpuPods.value = []
-        console.warn('Top CPU Pod数据格式异常，使用空数组')
+        console.warn('Top CPU Pod数据格式异常，后端返回结构:', response.data)
       }
       return response.data
     } catch (err) {
@@ -371,15 +380,18 @@ export function useAnalysis() {
     }
   }
 
-  const fetchNamespaceSummary = async () => {
+  const fetchNamespaceSummary = async (limit: number = 10, sortBy: string = 'combined') => {
     try {
-      const response = await api.get<ApiResponse<any>>('/statistics/namespace-summary')
-      // 确保返回的数据是数组格式
-      if (response.data && Array.isArray(response.data.data)) {
-        namespaceSummary.value = response.data.data
+      const response = await api.get<ApiResponse<any>>('/statistics/top-resource-namespaces', {
+        params: { limit, sort_by: sortBy }
+      })
+      // 处理正确的数据结构：response.data.data.data
+      if (response.data && response.data.data && Array.isArray(response.data.data.data)) {
+        namespaceSummary.value = response.data.data.data
+        console.log('✓ 命名空间汇总数据获取成功:', response.data.data.data.length, '条记录')
       } else {
         namespaceSummary.value = []
-        console.warn('命名空间汇总数据格式异常，使用空数组')
+        console.warn('命名空间汇总数据格式异常，后端返回结构:', response.data)
       }
       return response.data
     } catch (err) {
@@ -416,7 +428,7 @@ export function useAnalysis() {
         fetchAnalysis(),
         fetchTopMemoryPods(20),
         fetchTopCpuPods(20),
-        fetchNamespaceSummary()
+        fetchNamespaceSummary(10, 'combined')
       ])
 
       // 处理结果，即使部分失败也要展示成功的数据

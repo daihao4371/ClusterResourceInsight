@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -252,11 +253,43 @@ analysis:
 	return analysisResult, nil
 }
 
-// GetNamespacesSummary 获取所有命名空间汇总信息
-func (mc *MultiClusterResourceCollector) GetNamespacesSummary(ctx context.Context) ([]NamespaceSummary, error) {
+// GetTopResourceNamespaces 获取资源使用最高的命名空间 - 按指定方式排序并限制返回数量
+// 参数:
+//   - ctx: 上下文对象
+//   - limit: 返回数量限制，-1表示返回所有
+//   - sortBy: 排序方式 - "memory"(按内存), "cpu"(按CPU), "combined"(按综合资源)
+// 返回:
+//   - []NamespaceSummary: 排序后的命名空间汇总列表
+//   - error: 处理过程中的错误信息
+func (mc *MultiClusterResourceCollector) GetTopResourceNamespaces(ctx context.Context, limit int, sortBy string) ([]NamespaceSummary, error) {
+	return mc.GetTopResourceNamespacesByCluster(ctx, nil, limit, sortBy)
+}
+
+// GetTopResourceNamespacesByCluster 获取指定集群的资源使用最高的命名空间 - 支持按集群筛选
+// 参数:
+//   - ctx: 上下文对象
+//   - clusterID: 可选的集群ID筛选条件，为nil时统计所有集群
+//   - limit: 返回数量限制，-1表示返回所有
+//   - sortBy: 排序方式 - "memory"(按内存), "cpu"(按CPU), "combined"(按综合资源)
+// 返回:
+//   - []NamespaceSummary: 排序后的命名空间汇总列表
+//   - error: 处理过程中的错误信息
+func (mc *MultiClusterResourceCollector) GetTopResourceNamespacesByCluster(ctx context.Context, clusterID *uint, limit int, sortBy string) ([]NamespaceSummary, error) {
 	clusters, err := mc.clusterService.GetAllClusters()
 	if err != nil {
 		return nil, fmt.Errorf("获取集群列表失败: %v", err)
+	}
+	
+	// 如果指定了集群ID，则只处理该集群
+	if clusterID != nil {
+		targetCluster, found := findClusterByID(clusters, *clusterID)
+		if !found {
+			return nil, fmt.Errorf("集群ID %d 不存在", *clusterID)
+		}
+		if targetCluster.Status != "online" {
+			return []NamespaceSummary{}, nil // 返回空列表而不是错误
+		}
+		clusters = []models.ClusterConfig{targetCluster}
 	}
 
 	var summaries []NamespaceSummary
@@ -284,7 +317,39 @@ func (mc *MultiClusterResourceCollector) GetNamespacesSummary(ctx context.Contex
 		summaries = append(summaries, namespaceSummaries...)
 	}
 
+	// 根据指定方式排序
+	mc.sortNamespacesByResource(summaries, sortBy)
+
+	// 限制返回数量
+	if limit > 0 && len(summaries) > limit {
+		summaries = summaries[:limit]
+	}
+
 	return summaries, nil
+}
+
+// sortNamespacesByResource 根据资源使用量对namespace进行排序
+// 参数:
+//   - summaries: 待排序的namespace汇总切片
+//   - sortBy: 排序方式 - "memory", "cpu", "combined"
+func (mc *MultiClusterResourceCollector) sortNamespacesByResource(summaries []NamespaceSummary, sortBy string) {
+	sort.Slice(summaries, func(i, j int) bool {
+		switch sortBy {
+		case "memory":
+			// 按内存使用量从大到小排序
+			return summaries[i].TotalMemoryUsage > summaries[j].TotalMemoryUsage
+		case "cpu":
+			// 按CPU使用量从大到小排序  
+			return summaries[i].TotalCPUUsage > summaries[j].TotalCPUUsage
+		case "combined":
+			fallthrough
+		default:
+			// 按综合资源使用量排序（内存权重0.6，CPU权重0.4）
+			scoreI := float64(summaries[i].TotalMemoryUsage)*0.6 + float64(summaries[i].TotalCPUUsage)*0.4
+			scoreJ := float64(summaries[j].TotalMemoryUsage)*0.6 + float64(summaries[j].TotalCPUUsage)*0.4
+			return scoreI > scoreJ
+		}
+	})
 }
 
 // GetNamespacePods 获取指定命名空间下的所有Pod
@@ -563,6 +628,16 @@ func (mc *MultiClusterResourceCollector) GetPodTrendData(ctx context.Context, cl
 	return trendData, nil
 }
 
+// findClusterByID 根据ID查找集群 - 辅助函数，用于在集群列表中查找指定ID的集群
+func findClusterByID(clusters []models.ClusterConfig, clusterID uint) (models.ClusterConfig, bool) {
+	for _, cluster := range clusters {
+		if cluster.ID == clusterID {
+			return cluster, true
+		}
+	}
+	return models.ClusterConfig{}, false
+}
+
 // CollectSpecificClusterData 收集特定集群的数据 - 为Dashboard的集群筛选功能提供支持
 // 参数:
 //   - ctx: 上下文对象，用于控制请求生命周期和超时
@@ -645,4 +720,138 @@ func (mc *MultiClusterResourceCollector) CollectSpecificClusterData(ctx context.
 		cluster.ClusterName, clusterResult.TotalPods, clusterResult.UnreasonablePods)
 
 	return clusterResult, nil
+}
+
+// GetResourceDistributionStats 获取资源分布统计 - 聚合所有集群的CPU和内存资源分布统计
+// 参数:
+//   - ctx: 上下文对象，用于控制请求生命周期和超时
+//   - clusterID: 可选的集群ID筛选条件，为nil时统计所有集群
+//   - namespace: 可选的命名空间筛选条件，为空时统计所有命名空间
+//
+// 返回:
+//   - *ResourceDistributionStats: 资源分布统计结果
+//   - error: 统计过程中的错误信息
+func (mc *MultiClusterResourceCollector) GetResourceDistributionStats(ctx context.Context, clusterID *uint, namespace string) (*ResourceDistributionStats, error) {
+	logger.Info("开始获取资源分布统计数据，集群筛选: %v, 命名空间筛选: %s", clusterID, namespace)
+
+	// 初始化统计结果
+	stats := &ResourceDistributionStats{
+		CPU: struct {
+			TotalRequest    int64   `json:"totalRequest"`
+			TotalUsage      int64   `json:"totalUsage"`
+			UtilizationRate float64 `json:"utilizationRate"`
+		}{},
+		Memory: struct {
+			TotalRequest    int64   `json:"totalRequest"`
+			TotalUsage      int64   `json:"totalUsage"`
+			UtilizationRate float64 `json:"utilizationRate"`
+		}{},
+		GeneratedAt: time.Now(),
+	}
+
+	// 获取要统计的集群列表
+	clusters, err := mc.clusterService.GetAllClusters()
+	if err != nil {
+		logger.Error("获取集群列表失败: %v", err)
+		return stats, fmt.Errorf("获取集群列表失败: %v", err)
+	}
+
+	// 根据筛选条件过滤集群
+	var targetClusters []models.ClusterConfig
+	if clusterID != nil {
+		for _, cluster := range clusters {
+			if cluster.ID == *clusterID {
+				targetClusters = []models.ClusterConfig{cluster}
+				break
+			}
+		}
+		if len(targetClusters) == 0 {
+			logger.Warn("指定的集群ID不存在: %d", *clusterID)
+			return stats, fmt.Errorf("指定的集群不存在")
+		}
+	} else {
+		targetClusters = clusters
+	}
+
+	stats.ClustersAnalyzed = len(targetClusters)
+
+	// 从历史数据表聚合统计数据
+	for _, cluster := range targetClusters {
+		clusterStats, err := mc.getClusterResourceStats(cluster.ID, namespace)
+		if err != nil {
+			logger.Error("获取集群 %s 资源统计失败: %v", cluster.ClusterName, err)
+			continue
+		}
+
+		// 累加CPU统计数据
+		stats.CPU.TotalRequest += clusterStats.CPUTotalRequest
+		stats.CPU.TotalUsage += clusterStats.CPUTotalUsage
+
+		// 累加内存统计数据
+		stats.Memory.TotalRequest += clusterStats.MemoryTotalRequest
+		stats.Memory.TotalUsage += clusterStats.MemoryTotalUsage
+
+		stats.PodsAnalyzed += clusterStats.PodsCount
+	}
+
+	// 计算整体利用率
+	if stats.CPU.TotalRequest > 0 {
+		stats.CPU.UtilizationRate = float64(stats.CPU.TotalUsage) / float64(stats.CPU.TotalRequest) * 100
+	}
+	if stats.Memory.TotalRequest > 0 {
+		stats.Memory.UtilizationRate = float64(stats.Memory.TotalUsage) / float64(stats.Memory.TotalRequest) * 100
+	}
+
+	logger.Info("资源分布统计完成: 集群数=%d, Pod数=%d, CPU利用率=%.1f%%, 内存利用率=%.1f%%",
+		stats.ClustersAnalyzed, stats.PodsAnalyzed, stats.CPU.UtilizationRate, stats.Memory.UtilizationRate)
+
+	return stats, nil
+}
+
+// ClusterResourceStats 单集群资源统计中间结构 - 用于聚合计算的临时数据结构
+type ClusterResourceStats struct {
+	CPUTotalRequest    int64 // CPU总请求量 (millicores)
+	CPUTotalUsage      int64 // CPU总使用量 (millicores)
+	MemoryTotalRequest int64 // 内存总请求量 (bytes)
+	MemoryTotalUsage   int64 // 内存总使用量 (bytes)
+	PodsCount          int   // Pod数量
+}
+
+// getClusterResourceStats 获取单个集群的资源统计数据 - 从数据库聚合最新的Pod指标数据
+// 参数:
+//   - clusterID: 集群ID
+//   - namespace: 命名空间筛选条件，为空时统计所有命名空间
+//
+// 返回:
+//   - *ClusterResourceStats: 集群资源统计结果
+//   - error: 查询过程中的错误信息
+func (mc *MultiClusterResourceCollector) getClusterResourceStats(clusterID uint, namespace string) (*ClusterResourceStats, error) {
+	// 使用historyService查询最新的Pod指标数据
+	query := map[string]interface{}{
+		"cluster_id": clusterID,
+	}
+	
+	// 添加命名空间筛选条件
+	if namespace != "" {
+		query["namespace"] = namespace
+	}
+
+	// 查询最近24小时的数据并按pod聚合获取最新记录
+	pods, err := mc.historyService.GetLatestPodMetrics(clusterID, namespace, 24*time.Hour)
+	if err != nil {
+		return nil, fmt.Errorf("查询Pod指标数据失败: %v", err)
+	}
+
+	stats := &ClusterResourceStats{}
+	
+	// 聚合计算资源统计
+	for _, pod := range pods {
+		stats.CPUTotalRequest += pod.CPURequest
+		stats.CPUTotalUsage += pod.CPUUsage
+		stats.MemoryTotalRequest += pod.MemoryRequest
+		stats.MemoryTotalUsage += pod.MemoryUsage
+		stats.PodsCount++
+	}
+
+	return stats, nil
 }

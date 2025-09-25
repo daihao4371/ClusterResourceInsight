@@ -1,9 +1,9 @@
 <template>
-  <div v-if="show" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click="$emit('close')">
-    <div class="bg-dark-800 rounded-lg p-6 w-full max-w-md m-4" @click.stop>
+  <div v-if="show" class="fixed inset-0 flex items-center justify-center z-50" style="background: rgba(0, 0, 0, 0.5);" @click="$emit('close')">
+    <div class="rounded-lg p-6 w-full max-w-md m-4 shadow-2xl" style="background: var(--bg-secondary); border: 1px solid var(--border-color);" @click.stop>
       <div class="flex items-center justify-between mb-6">
-        <h3 class="text-lg font-semibold">活动优化配置</h3>
-        <button @click="$emit('close')" class="text-gray-400 hover:text-white">
+        <h3 class="text-lg font-semibold" style="color: var(--text-primary);">活动优化配置</h3>
+        <button @click="$emit('close')" class="transition-colors hover:opacity-75" style="color: var(--text-secondary);">
           <X class="w-5 h-5" />
         </button>
       </div>
@@ -11,7 +11,7 @@
       <div v-if="config" class="space-y-4">
         <!-- 去重配置 -->
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-2">去重时间窗口（分钟）</label>
+          <label class="block text-sm font-medium mb-2" style="color: var(--text-secondary);">去重时间窗口（分钟）</label>
           <input 
             v-model.number="localConfig.deduplication_window"
             type="number"
@@ -20,12 +20,12 @@
             class="w-full input-field"
             placeholder="30"
           />
-          <div class="text-xs text-gray-500 mt-1">在此时间窗口内的重复活动将被去重</div>
+          <div class="text-xs mt-1" style="color: var(--text-muted);">在此时间窗口内的重复活动将被去重</div>
         </div>
         
         <!-- 最大重复次数 -->
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-2">最大重复次数</label>
+          <label class="block text-sm font-medium mb-2" style="color: var(--text-secondary);">最大重复次数</label>
           <input 
             v-model.number="localConfig.max_duplicate_count"
             type="number"
@@ -34,12 +34,12 @@
             class="w-full input-field"
             placeholder="3"
           />
-          <div class="text-xs text-gray-500 mt-1">超过此数量的重复活动将被删除</div>
+          <div class="text-xs mt-1" style="color: var(--text-muted);">超过此数量的重复活动将被删除</div>
         </div>
         
         <!-- 聚合阈值 -->
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-2">聚合阈值</label>
+          <label class="block text-sm font-medium mb-2" style="color: var(--text-secondary);">聚合阈值</label>
           <input 
             v-model.number="localConfig.aggregation_threshold"
             type="number"
@@ -48,12 +48,12 @@
             class="w-full input-field"
             placeholder="5"
           />
-          <div class="text-xs text-gray-500 mt-1">达到此数量的相似活动将被聚合</div>
+          <div class="text-xs mt-1" style="color: var(--text-muted);">达到此数量的相似活动将被聚合</div>
         </div>
         
         <!-- 数据保留天数 -->
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-2">数据保留天数</label>
+          <label class="block text-sm font-medium mb-2" style="color: var(--text-secondary);">数据保留天数</label>
           <input 
             v-model.number="localConfig.cleanup_retention_days"
             type="number"
@@ -62,38 +62,53 @@
             class="w-full input-field"
             placeholder="7"
           />
-          <div class="text-xs text-gray-500 mt-1">超过此天数的活动数据将被清理</div>
+          <div class="text-xs mt-1" style="color: var(--text-muted);">超过此天数的活动数据将被清理</div>
         </div>
         
         <!-- 开关配置 -->
         <div class="space-y-3">
           <div class="flex items-center justify-between">
-            <span class="text-sm text-gray-300">启用聚合</span>
+            <span class="text-sm" style="color: var(--text-secondary);">启用聚合</span>
             <button 
               @click="localConfig.enable_aggregation = !localConfig.enable_aggregation"
-              :class="['w-12 h-6 rounded-full transition-colors', localConfig.enable_aggregation ? 'bg-primary-500' : 'bg-gray-600']"
+              class="w-12 h-6 rounded-full transition-colors"
+              :style="{ background: localConfig.enable_aggregation ? 'var(--accent-primary)' : 'var(--bg-tertiary)' }"
             >
-              <div :class="['w-5 h-5 bg-white rounded-full transition-transform', localConfig.enable_aggregation ? 'translate-x-6' : 'translate-x-1']"></div>
+              <div 
+                class="w-5 h-5 rounded-full transition-transform"
+                :class="localConfig.enable_aggregation ? 'translate-x-6' : 'translate-x-1'"
+                style="background: var(--text-primary);"
+              ></div>
             </button>
           </div>
           
           <div class="flex items-center justify-between">
-            <span class="text-sm text-gray-300">启用噪音过滤</span>
+            <span class="text-sm" style="color: var(--text-secondary);">启用噪音过滤</span>
             <button 
               @click="localConfig.noise_filter_enabled = !localConfig.noise_filter_enabled"
-              :class="['w-12 h-6 rounded-full transition-colors', localConfig.noise_filter_enabled ? 'bg-primary-500' : 'bg-gray-600']"
+              class="w-12 h-6 rounded-full transition-colors"
+              :style="{ background: localConfig.noise_filter_enabled ? 'var(--accent-primary)' : 'var(--bg-tertiary)' }"
             >
-              <div :class="['w-5 h-5 bg-white rounded-full transition-transform', localConfig.noise_filter_enabled ? 'translate-x-6' : 'translate-x-1']"></div>
+              <div 
+                class="w-5 h-5 rounded-full transition-transform"
+                :class="localConfig.noise_filter_enabled ? 'translate-x-6' : 'translate-x-1'"
+                style="background: var(--text-primary);"
+              ></div>
             </button>
           </div>
           
           <div class="flex items-center justify-between">
-            <span class="text-sm text-gray-300">自动清理</span>
+            <span class="text-sm" style="color: var(--text-secondary);">自动清理</span>
             <button 
               @click="localConfig.auto_cleanup_enabled = !localConfig.auto_cleanup_enabled"
-              :class="['w-12 h-6 rounded-full transition-colors', localConfig.auto_cleanup_enabled ? 'bg-primary-500' : 'bg-gray-600']"
+              class="w-12 h-6 rounded-full transition-colors"
+              :style="{ background: localConfig.auto_cleanup_enabled ? 'var(--accent-primary)' : 'var(--bg-tertiary)' }"
             >
-              <div :class="['w-5 h-5 bg-white rounded-full transition-transform', localConfig.auto_cleanup_enabled ? 'translate-x-6' : 'translate-x-1']"></div>
+              <div 
+                class="w-5 h-5 rounded-full transition-transform"
+                :class="localConfig.auto_cleanup_enabled ? 'translate-x-6' : 'translate-x-1'"
+                style="background: var(--text-primary);"
+              ></div>
             </button>
           </div>
         </div>

@@ -15,10 +15,12 @@
           :top-memory-pods="topMemoryPods"
           :top-cpu-pods="topCpuPods"
           :namespace-summary="namespaceSummary"
+          :namespace-sort-by="namespaceSortBy"
           :loading="loading"
           @refresh-memory="fetchTopMemoryPods(20)"
           @refresh-cpu="fetchTopCpuPods(20)"
-          @refresh-namespace="fetchNamespaceSummary"
+          @refresh-namespace="refreshNamespaceSummary"
+          @namespace-sort-change="handleNamespaceSortChange"
         />
       </div>
 
@@ -129,11 +131,20 @@ const showOptimizationConfig = ref(false)
 const sortBy = ref('total_waste')
 const selectedCluster = ref('')
 const pageSize = ref(10)
+const namespaceSortBy = ref('combined')  // 新增：命名空间排序状态
 
 // 计算属性
 const availableClusters = computed(() => {
+  console.log('计算availableClusters，原始数据:', {
+    clusters: clusters.value,
+    analysisData: analysisData.value?.top50_problems,
+    topMemoryPods: topMemoryPods.value,
+    topCpuPods: topCpuPods.value,
+    namespaceSummary: namespaceSummary.value
+  })
+  
   return extractClusterNames(
-    clusters.value || [],
+    clusters.value || [],  // 使用所有集群，不过滤状态
     analysisData.value?.top50_problems || [],
     topMemoryPods.value || [],
     topCpuPods.value || [],
@@ -191,12 +202,22 @@ const executeOptimization = async () => {
   }
 }
 
+// 命名空间排序相关方法
+const refreshNamespaceSummary = async () => {
+  await fetchNamespaceSummary(10, namespaceSortBy.value)
+}
+
+const handleNamespaceSortChange = async (newSortBy: string) => {
+  namespaceSortBy.value = newSortBy
+  await fetchNamespaceSummary(10, newSortBy)
+}
+
 // 数据刷新方法 - 集成自动去重优化
 const refreshAllAnalysisData = async () => {
   await Promise.allSettled([
     fetchTopMemoryPods(20),
     fetchTopCpuPods(20),
-    fetchNamespaceSummary()
+    fetchNamespaceSummary(10, namespaceSortBy.value)
   ])
   
   // 自动执行告警去重优化，提升数据质量
@@ -257,7 +278,7 @@ onMounted(async () => {
   await Promise.allSettled([
     fetchTopMemoryPods(20),
     fetchTopCpuPods(20),
-    fetchNamespaceSummary(),
+    fetchNamespaceSummary(10, namespaceSortBy.value),
     fetchAnalysis(),
     fetchOptimizationConfig()
   ])

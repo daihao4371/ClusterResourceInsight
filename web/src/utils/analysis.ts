@@ -83,7 +83,7 @@ export const getWasteClass = (waste: number): string => {
 }
 
 /**
- * 从多个数据源提取集群名称
+ * 从多个数据源提取集群名称 - 提供更灵活的集群名称提取逻辑
  */
 export const extractClusterNames = (
   clusters: any[],
@@ -94,20 +94,41 @@ export const extractClusterNames = (
 ): string[] => {
   const clusterNames = new Set<string>()
   
-  // 从集群配置API获取
+  console.log('开始提取集群名称，数据源:', {
+    clustersCount: clusters?.length || 0,
+    podsCount: pods?.length || 0,
+    topMemoryPodsCount: topMemoryPods?.length || 0,
+    topCpuPodsCount: topCpuPods?.length || 0,
+    namespaceSummaryCount: namespaceSummary?.length || 0
+  })
+  
+  // 从集群配置API获取（优先级最高）
   if (Array.isArray(clusters)) {
     clusters.forEach(cluster => {
-      const name = cluster.name || cluster.cluster_name || cluster.clusterName
-      if (name) clusterNames.add(name)
+      // 支持多种可能的字段名
+      const name = cluster.cluster_name || cluster.name || cluster.clusterName || cluster.clusterId
+      if (name) {
+        clusterNames.add(name)
+        console.log('从集群配置API获取集群名称:', name)
+      }
     })
   }
   
   // 从各种Pod数据源获取
-  const allPodSources = [pods, topMemoryPods, topCpuPods]
+  const allPodSources = [
+    { name: 'problems', data: pods },
+    { name: 'topMemoryPods', data: topMemoryPods },
+    { name: 'topCpuPods', data: topCpuPods }
+  ]
+  
   allPodSources.forEach(source => {
-    if (Array.isArray(source)) {
-      source.forEach(pod => {
-        if (pod.cluster_name) clusterNames.add(pod.cluster_name)
+    if (Array.isArray(source.data)) {
+      source.data.forEach(pod => {
+        const clusterName = pod.cluster_name || pod.cluster || pod.clusterName
+        if (clusterName) {
+          clusterNames.add(clusterName)
+          console.log(`从${source.name}获取集群名称:`, clusterName)
+        }
       })
     }
   })
@@ -115,9 +136,16 @@ export const extractClusterNames = (
   // 从命名空间汇总获取
   if (Array.isArray(namespaceSummary)) {
     namespaceSummary.forEach(ns => {
-      if (ns.cluster_name) clusterNames.add(ns.cluster_name)
+      const clusterName = ns.cluster_name || ns.cluster || ns.clusterName
+      if (clusterName) {
+        clusterNames.add(clusterName)
+        console.log('从命名空间汇总获取集群名称:', clusterName)
+      }
     })
   }
   
-  return Array.from(clusterNames).sort()
+  const result = Array.from(clusterNames).sort()
+  console.log('集群名称提取完成，共找到', result.length, '个集群:', result)
+  
+  return result
 }
