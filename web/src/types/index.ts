@@ -148,6 +148,7 @@ export interface HistoryQueryRequest {
   pod_name?: string
   start_time?: string
   end_time?: string
+  only_problems?: boolean  // 只查询问题Pod
 }
 
 export interface PodMetricsHistory {

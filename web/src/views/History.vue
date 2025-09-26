@@ -24,7 +24,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div>
           <label class="block text-sm font-medium text-gray-300 mb-2">集群</label>
-          <select v-model="queryParams.cluster_id" class="input-field">
+          <select v-model="queryParams.cluster_id" @change="onClusterChange" class="input-field">
             <option value="">所有集群</option>
             <option v-for="cluster in clusters" :key="cluster.id" :value="cluster.id">
               {{ cluster.cluster_name }}
@@ -34,22 +34,12 @@
         
         <div>
           <label class="block text-sm font-medium text-gray-300 mb-2">命名空间</label>
-          <input
-            v-model="queryParams.namespace"
-            type="text"
-            placeholder="输入命名空间"
-            class="input-field"
-          />
-        </div>
-        
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-2">Pod名称</label>
-          <input
-            v-model="queryParams.pod_name"
-            type="text"
-            placeholder="输入Pod名称"
-            class="input-field"
-          />
+          <select v-model="queryParams.namespace" class="input-field" @change="onNamespaceChange">
+            <option value="">所有命名空间</option>
+            <option v-for="namespace in namespaces" :key="namespace" :value="namespace">
+              {{ namespace }}
+            </option>
+          </select>
         </div>
         
         <div>
@@ -105,16 +95,16 @@
                 时间
               </th>
               <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">
-                Pod信息
+                集群/命名空间
               </th>
               <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">
-                状态
+                资源状态
               </th>
               <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">
-                CPU
+                CPU资源
               </th>
               <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">
-                内存
+                内存资源
               </th>
               <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">
                 节点
@@ -132,24 +122,24 @@
                 {{ formatDateTime(record.collected_at) }}
               </td>
               
-              <!-- Pod信息 -->
+              <!-- 集群/命名空间信息 -->
               <td class="px-6 py-4">
                 <div>
-                  <div class="font-medium text-white">{{ record.pod_name }}</div>
+                  <div class="font-medium text-white">{{ record.cluster?.cluster_name || record.cluster_name || 'N/A' }}</div>
                   <div class="text-sm text-gray-400">
-                    {{ record.namespace }} / {{ record.cluster_name }}
+                    {{ record.namespace }}
                   </div>
                 </div>
               </td>
               
-              <!-- 状态 -->
+              <!-- 资源状态 -->
               <td class="px-6 py-4">
-                <span 
-                  class="px-2 py-1 text-xs font-medium rounded-full"
-                  :class="getStatusBadgeClass(record.status)"
-                >
-                  {{ record.status }}
-                </span>
+                <div class="space-y-1">
+                  <span class="px-2 py-1 text-xs font-medium rounded-full bg-danger-500/20 text-danger-400 border border-danger-500/30">
+                    资源不合理
+                  </span>
+                  <div class="text-xs text-gray-500">{{ getResourceIssues(record) }}</div>
+                </div>
               </td>
               
               <!-- CPU -->
@@ -157,15 +147,15 @@
                 <div class="text-sm space-y-1">
                   <div class="flex justify-between">
                     <span class="text-gray-400">请求:</span>
-                    <span>{{ record.cpu_request || 'N/A' }}</span>
+                    <span>{{ formatCPU(record.cpu_request) }}</span>
                   </div>
                   <div class="flex justify-between">
                     <span class="text-gray-400">限制:</span>
-                    <span>{{ record.cpu_limit || 'N/A' }}</span>
+                    <span>{{ formatCPU(record.cpu_limit) }}</span>
                   </div>
                   <div class="flex justify-between">
                     <span class="text-gray-400">使用:</span>
-                    <span class="text-primary-400">{{ record.cpu_usage || 'N/A' }}</span>
+                    <span class="text-primary-400">{{ formatCPU(record.cpu_usage) }}</span>
                   </div>
                 </div>
               </td>
@@ -175,15 +165,15 @@
                 <div class="text-sm space-y-1">
                   <div class="flex justify-between">
                     <span class="text-gray-400">请求:</span>
-                    <span>{{ record.memory_request || 'N/A' }}</span>
+                    <span>{{ formatMemory(record.memory_request) }}</span>
                   </div>
                   <div class="flex justify-between">
                     <span class="text-gray-400">限制:</span>
-                    <span>{{ record.memory_limit || 'N/A' }}</span>
+                    <span>{{ formatMemory(record.memory_limit) }}</span>
                   </div>
                   <div class="flex justify-between">
                     <span class="text-gray-400">使用:</span>
-                    <span class="text-primary-400">{{ record.memory_usage || 'N/A' }}</span>
+                    <span class="text-primary-400">{{ formatMemory(record.memory_usage) }}</span>
                   </div>
                 </div>
               </td>
@@ -249,22 +239,23 @@ import {
   Search, 
   Clock 
 } from 'lucide-vue-next'
-import { useHistory, useClusters } from '../composables/api'
+import { useHistory, useClusters, useNamespaces } from '../composables/api'
 import { formatDateTime, getTimeRange } from '../utils/date'
 import type { HistoryQueryRequest } from '../types'
 
 const { history: historyData, total, loading, fetchHistory } = useHistory()
 const { clusters, fetchClusters } = useClusters()
+const { namespaces, fetchNamespaces } = useNamespaces()
 
-// 查询参数
+// 查询参数 - 只查询不合理的Pod
 const queryParams = ref<HistoryQueryRequest>({
   page: 1,
   size: 20,
   cluster_id: undefined,
   namespace: '',
-  pod_name: '',
   start_time: '',
-  end_time: ''
+  end_time: '',
+  only_problems: true // 只查询问题Pod
 })
 
 // 时间范围
@@ -314,20 +305,95 @@ const nextPage = () => {
   }
 }
 
-// 状态徽章样式
-const getStatusBadgeClass = (status: string) => {
-  const statusMap: Record<string, string> = {
-    'Running': 'bg-success-500/20 text-success-400 border border-success-500/30',
-    'Pending': 'bg-warning-500/20 text-warning-400 border border-warning-500/30',
-    'Failed': 'bg-danger-500/20 text-danger-400 border border-danger-500/30',
-    'Succeeded': 'bg-success-500/20 text-success-400 border border-success-500/30'
+// 集群变化处理 - 当集群改变时更新命名空间列表
+const onClusterChange = async () => {
+  // 清空当前选择的命名空间
+  queryParams.value.namespace = ''
+  // 重置页码
+  queryParams.value.page = 1
+  
+  // 根据选择的集群获取对应的命名空间
+  await fetchNamespaces(queryParams.value.cluster_id || undefined)
+  
+  // 重新查询历史数据
+  await searchHistory()
+}
+
+// 命名空间变化处理
+const onNamespaceChange = () => {
+  // 当命名空间变化时，重新查询数据
+  queryParams.value.page = 1
+  searchHistory()
+}
+
+// 获取资源问题描述
+const getResourceIssues = (record: any) => {
+  const issues = []
+  
+  // 检查CPU资源问题
+  if (record.cpu_req_pct > 80) {
+    issues.push('CPU请求过高')
   }
-  return statusMap[status] || 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
+  if (record.cpu_limit_pct > 90) {
+    issues.push('CPU使用达上限')
+  }
+  if (record.cpu_request === 0) {
+    issues.push('未设置CPU请求')
+  }
+  
+  // 检查内存资源问题
+  if (record.memory_req_pct > 80) {
+    issues.push('内存请求过高')
+  }
+  if (record.memory_limit_pct > 90) {
+    issues.push('内存使用达上限')
+  }
+  if (record.memory_request === 0) {
+    issues.push('未设置内存请求')
+  }
+  
+  return issues.length > 0 ? issues.join(', ') : '资源配置不合理'
+}
+
+// 格式化CPU值（从millicores转换为cores）
+const formatCPU = (value: number | string | null | undefined): string => {
+  if (value === null || value === undefined || value === '') return 'N/A'
+  const numValue = typeof value === 'string' ? parseFloat(value) : value
+  if (isNaN(numValue)) return 'N/A'
+  
+  if (numValue >= 1000) {
+    return `${(numValue / 1000).toFixed(2)} cores`
+  }
+  return `${numValue}m`
+}
+
+// 格式化内存值（从bytes转换为MB/GB）
+const formatMemory = (value: number | string | null | undefined): string => {
+  if (value === null || value === undefined || value === '') return 'N/A'
+  const numValue = typeof value === 'string' ? parseInt(value) : value
+  if (isNaN(numValue)) return 'N/A'
+  
+  if (numValue >= 1024 * 1024 * 1024) {
+    return `${(numValue / (1024 * 1024 * 1024)).toFixed(2)} GB`
+  } else if (numValue >= 1024 * 1024) {
+    return `${(numValue / (1024 * 1024)).toFixed(0)} MB`
+  } else if (numValue >= 1024) {
+    return `${(numValue / 1024).toFixed(0)} KB`
+  }
+  return `${numValue} B`
 }
 
 onMounted(async () => {
+  // 先获取集群列表
   await fetchClusters()
+  
+  // 初始化时获取所有命名空间（不指定集群）
+  await fetchNamespaces()
+  
+  // 设置默认时间范围
   updateTimeRange()
+  
+  // 执行初始查询
   await searchHistory()
 })
 </script>

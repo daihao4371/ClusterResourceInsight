@@ -48,15 +48,16 @@ func NewHistoryService() *HistoryService {
 
 // HistoryQueryRequest 历史数据查询请求
 type HistoryQueryRequest struct {
-	ClusterID   uint      `form:"cluster_id"`   // 集群ID筛选
-	Namespace   string    `form:"namespace"`    // 命名空间筛选
-	PodName     string    `form:"pod_name"`     // Pod名称筛选
-	StartTime   time.Time `form:"start_time"`   // 开始时间
-	EndTime     time.Time `form:"end_time"`     // 结束时间
-	Page        int       `form:"page"`         // 页码
-	Size        int       `form:"size"`         // 每页大小
-	OrderBy     string    `form:"order_by"`     // 排序字段
-	OrderDesc   bool      `form:"order_desc"`   // 是否降序
+	ClusterID     uint      `form:"cluster_id"`     // 集群ID筛选
+	Namespace     string    `form:"namespace"`      // 命名空间筛选
+	PodName       string    `form:"pod_name"`       // Pod名称筛选
+	StartTime     time.Time `form:"start_time"`     // 开始时间
+	EndTime       time.Time `form:"end_time"`       // 结束时间
+	Page          int       `form:"page"`           // 页码
+	Size          int       `form:"size"`           // 每页大小
+	OrderBy       string    `form:"order_by"`       // 排序字段
+	OrderDesc     bool      `form:"order_desc"`     // 是否降序
+	OnlyProblems  bool      `form:"only_problems"`  // 只查询问题Pod
 }
 
 // HistoryQueryResponse 历史数据查询响应
@@ -113,7 +114,7 @@ func (hs *HistoryService) SavePodMetrics(clusterID uint, pods []PodResourceInfo)
 	return nil
 }
 
-// QueryHistory 查询历史数据 - 使用统一分页逻辑
+// QueryHistory 查询历史数据 - 使用统一分页逻辑，支持问题Pod过滤
 func (hs *HistoryService) QueryHistory(req HistoryQueryRequest) (*HistoryQueryResponse, error) {
 	// 使用统一的分页处理器
 	paginationHandler := pagination.NewDatabasePaginationHandler()
@@ -143,6 +144,20 @@ func (hs *HistoryService) QueryHistory(req HistoryQueryRequest) (*HistoryQueryRe
 	}
 	if !req.EndTime.IsZero() {
 		query = query.Where("collected_at <= ?", req.EndTime)
+	}
+
+	// 如果只查询问题Pod，添加问题过滤条件
+	if req.OnlyProblems {
+		query = query.Where("(" +
+			"cpu_req_pct > 80 OR " +           // CPU请求利用率过高
+			"memory_req_pct > 80 OR " +        // 内存请求利用率过高
+			"cpu_limit_pct > 90 OR " +         // CPU使用率接近限制
+			"memory_limit_pct > 90 OR " +      // 内存使用率接近限制
+			"cpu_request = 0 OR " +            // 未设置CPU请求
+			"memory_request = 0 OR " +         // 未设置内存请求
+			"cpu_limit = 0 OR " +              // 未设置CPU限制
+			"memory_limit = 0" +               // 未设置内存限制
+			")")
 	}
 
 	// 计算总数

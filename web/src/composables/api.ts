@@ -173,13 +173,39 @@ export function useHistory() {
     try {
       loading.value = true
       error.value = null
-      const response = await api.post<ApiResponse<HistoryQueryResponse>>('/history/query', params)
-      history.value = response.data.data.data
-      total.value = response.data.data.total
-      return response.data.data
+      
+      // 构建查询参数，过滤掉空值
+      const queryParams: any = {}
+      if (params.cluster_id) queryParams.cluster_id = params.cluster_id
+      if (params.namespace) queryParams.namespace = params.namespace
+      if (params.pod_name) queryParams.pod_name = params.pod_name
+      if (params.start_time) queryParams.start_time = params.start_time
+      if (params.end_time) queryParams.end_time = params.end_time
+      queryParams.page = params.page
+      queryParams.size = params.size
+      
+      // 使用GET请求传递查询参数
+      const response = await api.get<ApiResponse<HistoryQueryResponse>>('/history/query', {
+        params: queryParams
+      })
+      
+      console.log('历史数据API响应:', response.data)
+      
+      // 修正数据路径访问
+      if (response.data && response.data.data) {
+        history.value = response.data.data.data || []
+        total.value = response.data.data.total || 0
+        return response.data.data
+      } else {
+        history.value = []
+        total.value = 0
+        console.warn('历史数据格式异常:', response.data)
+      }
     } catch (err) {
       error.value = err instanceof Error ? err.message : '获取历史数据失败'
       console.error('获取历史数据失败:', err)
+      history.value = []
+      total.value = 0
     } finally {
       loading.value = false
     }
@@ -483,21 +509,40 @@ export function useAnalysis() {
  * 命名空间数据获取
  */
 export function useNamespaces() {
-  const namespaces = ref<NamespaceSummary[]>([])
+  const namespaces = ref<string[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  const fetchNamespaces = async (clusterName?: string) => {
+  const fetchNamespaces = async (clusterID?: number) => {
     try {
       loading.value = true
       error.value = null
-      const params = clusterName ? { cluster_name: clusterName } : {}
-      const response = await api.get<ApiResponse<NamespaceSummary[]>>('/namespaces/summary', { params })
-      namespaces.value = response.data.data
-      return response.data.data
+      
+      // 构建查询参数
+      const params: any = {}
+      if (clusterID && clusterID !== 0) {
+        params.cluster_id = clusterID
+      }
+      
+      const response = await api.get<ApiResponse<any>>('/namespaces', { params })
+      
+      console.log('命名空间API响应:', response.data)
+      
+      // 处理后端返回的数据结构
+      if (response.data && response.data.data && response.data.data.data && Array.isArray(response.data.data.data)) {
+        // 后端返回的是字符串数组
+        namespaces.value = response.data.data.data
+        console.log('✓ 命名空间获取成功:', namespaces.value.length, '个命名空间', namespaces.value)
+      } else {
+        namespaces.value = []
+        console.warn('命名空间数据格式异常:', response.data)
+      }
+      
+      return namespaces.value
     } catch (err) {
       error.value = err instanceof Error ? err.message : '获取命名空间数据失败'
       console.error('获取命名空间数据失败:', err)
+      namespaces.value = []
     } finally {
       loading.value = false
     }
