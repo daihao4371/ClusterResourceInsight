@@ -63,15 +63,26 @@ func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollec
 		historyGroup.DELETE("/cleanup", api.CleanupOldData(historyService))
 	}
 
-	// 新增的调度管理接口
+	// 调度管理接口 - 统一管理所有调度相关操作
 	scheduleService := service.NewScheduleService()
 	scheduleGroup := r.Group("/schedule")
 	{
+		// 服务控制接口
 		scheduleGroup.GET("/status", api.GetScheduleStatus(scheduleService))
 		scheduleGroup.POST("/start", api.StartScheduleService(scheduleService))
 		scheduleGroup.POST("/stop", api.StopScheduleService(scheduleService))
+		
+		// 任务管理接口
 		scheduleGroup.GET("/jobs", api.GetScheduleJobs(scheduleService))
+		scheduleGroup.POST("/jobs/:cluster_id/start", api.StartClusterJob(scheduleService))
+		scheduleGroup.POST("/jobs/:cluster_id/stop", api.StopClusterJob(scheduleService))
 		scheduleGroup.POST("/jobs/:cluster_id/restart", api.RestartClusterJob(scheduleService))
+		scheduleGroup.POST("/jobs/:cluster_id/execute", api.ExecuteJobNow(scheduleService))
+		scheduleGroup.PUT("/jobs/:cluster_id/settings", api.UpdateJobSettings(scheduleService))
+		scheduleGroup.POST("/jobs/refresh", api.RefreshJobsFromClusters(scheduleService)) // 新增：从集群配置刷新任务
+		
+		// 设置管理接口
+		scheduleGroup.GET("/settings", api.GetScheduleSettings(scheduleService))
 		scheduleGroup.PUT("/settings", api.UpdateScheduleSettings(scheduleService))
 	}
 

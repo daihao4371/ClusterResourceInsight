@@ -200,6 +200,24 @@ export interface GlobalScheduleSettings {
   health_check_interval: number
 }
 
+// 调度服务状态类型
+export interface ScheduleServiceStatus {
+  service_running: boolean
+  total_jobs: number
+  running_jobs: number
+  error_jobs: number
+  suspended_jobs: number
+  stopped_jobs: number
+  global_settings: GlobalScheduleSettings
+}
+
+// 任务同步结果类型
+export interface JobSyncResult {
+  data: ScheduleJobInfo[]
+  count: number
+  sync_message: string
+}
+
 // 通知系统类型
 export interface Notification {
   id: string
@@ -356,4 +374,29 @@ export interface RouteMeta {
   requiresAuth?: boolean
   roles?: string[]
   keepAlive?: boolean
+}
+
+// 调度任务相关类型
+export interface ScheduleJobInfo {
+  cluster_id: number
+  cluster_name: string
+  interval: number  // 前端以分钟为单位
+  last_run: string
+  next_run: string
+  status: 'running' | 'stopped' | 'error' | 'suspended'
+  error_count: number
+  last_error: string
+  total_runs: number
+  successful_runs: number
+}
+
+// 全局调度设置类型
+export interface GlobalScheduleSettings {
+  enabled: boolean
+  default_interval: number  // 分钟
+  max_concurrent_jobs: number
+  retry_max_attempts: number
+  retry_interval: number    // 分钟
+  enable_persistence: boolean
+  health_check_interval: number  // 分钟
 }

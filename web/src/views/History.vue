@@ -107,7 +107,7 @@
                 内存资源
               </th>
               <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">
-                节点
+                Pod名称
               </th>
             </tr>
           </thead>
@@ -178,9 +178,14 @@
                 </div>
               </td>
               
-              <!-- 节点 -->
-              <td class="px-6 py-4 text-sm text-gray-300">
-                {{ record.node_name }}
+              <!-- Pod名称 -->
+              <td class="px-6 py-4">
+                <div>
+                  <div class="font-medium text-white">{{ record.pod_name || 'N/A' }}</div>
+                  <div class="text-xs text-gray-500">
+                    节点: {{ record.node_name || 'N/A' }}
+                  </div>
+                </div>
               </td>
             </tr>
           </tbody>

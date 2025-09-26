@@ -48,25 +48,31 @@ func NewHistoryService() *HistoryService {
 
 // HistoryQueryRequest 历史数据查询请求
 type HistoryQueryRequest struct {
-	ClusterID     uint      `form:"cluster_id"`     // 集群ID筛选
-	Namespace     string    `form:"namespace"`      // 命名空间筛选
-	PodName       string    `form:"pod_name"`       // Pod名称筛选
-	StartTime     time.Time `form:"start_time"`     // 开始时间
-	EndTime       time.Time `form:"end_time"`       // 结束时间
-	Page          int       `form:"page"`           // 页码
-	Size          int       `form:"size"`           // 每页大小
-	OrderBy       string    `form:"order_by"`       // 排序字段
-	OrderDesc     bool      `form:"order_desc"`     // 是否降序
-	OnlyProblems  bool      `form:"only_problems"`  // 只查询问题Pod
+	ClusterID    uint      `form:"cluster_id"`    // 集群ID筛选
+	Namespace    string    `form:"namespace"`     // 命名空间筛选
+	PodName      string    `form:"pod_name"`      // Pod名称筛选
+	StartTime    time.Time `form:"start_time"`    // 开始时间
+	EndTime      time.Time `form:"end_time"`      // 结束时间
+	Page         int       `form:"page"`          // 页码
+	Size         int       `form:"size"`          // 每页大小
+	OrderBy      string    `form:"order_by"`      // 排序字段
+	OrderDesc    bool      `form:"order_desc"`    // 是否降序
+	OnlyProblems bool      `form:"only_problems"` // 只查询问题Pod
 }
 
 // HistoryQueryResponse 历史数据查询响应
 type HistoryQueryResponse struct {
-	Data       []models.PodMetricsHistory `json:"data"`
-	Total      int64                      `json:"total"`
-	Page       int                        `json:"page"`
-	Size       int                        `json:"size"`
-	TotalPages int                        `json:"total_pages"`
+	Data       []HistoryRecord `json:"data"`
+	Total      int64           `json:"total"`
+	Page       int             `json:"page"`
+	Size       int             `json:"size"`
+	TotalPages int             `json:"total_pages"`
+}
+
+// HistoryRecord 历史记录响应结构体，包含集群名称
+type HistoryRecord struct {
+	models.PodMetricsHistory
+	ClusterName string `json:"cluster_name"` // 集群名称
 }
 
 // SavePodMetrics 批量保存Pod监控数据
@@ -114,19 +120,19 @@ func (hs *HistoryService) SavePodMetrics(clusterID uint, pods []PodResourceInfo)
 	return nil
 }
 
-// QueryHistory 查询历史数据 - 使用统一分页逻辑，支持问题Pod过滤
+// QueryHistory 查询历史数据 - 使用统一分页逻辑，支持问题Pod过滤和数据去重
 func (hs *HistoryService) QueryHistory(req HistoryQueryRequest) (*HistoryQueryResponse, error) {
 	// 使用统一的分页处理器
 	paginationHandler := pagination.NewDatabasePaginationHandler()
 	paginationParams := paginationHandler.ParsePaginationParams(req.Page, req.Size, 20)
-	
+
 	// 设置默认排序
 	if req.OrderBy == "" {
 		req.OrderBy = "collected_at"
 		req.OrderDesc = true
 	}
 
-	// 构建查询条件
+	// 构建基础查询条件
 	query := hs.db.Model(&models.PodMetricsHistory{})
 
 	// 应用筛选条件
@@ -149,20 +155,62 @@ func (hs *HistoryService) QueryHistory(req HistoryQueryRequest) (*HistoryQueryRe
 	// 如果只查询问题Pod，添加问题过滤条件
 	if req.OnlyProblems {
 		query = query.Where("(" +
-			"cpu_req_pct > 80 OR " +           // CPU请求利用率过高
-			"memory_req_pct > 80 OR " +        // 内存请求利用率过高
-			"cpu_limit_pct > 90 OR " +         // CPU使用率接近限制
-			"memory_limit_pct > 90 OR " +      // 内存使用率接近限制
-			"cpu_request = 0 OR " +            // 未设置CPU请求
-			"memory_request = 0 OR " +         // 未设置内存请求
-			"cpu_limit = 0 OR " +              // 未设置CPU限制
-			"memory_limit = 0" +               // 未设置内存限制
+			"cpu_req_pct > 80 OR " + // CPU请求利用率过高
+			"memory_req_pct > 80 OR " + // 内存请求利用率过高
+			"cpu_limit_pct > 90 OR " + // CPU使用率接近限制
+			"memory_limit_pct > 90 OR " + // 内存使用率接近限制
+			"cpu_request = 0 OR " + // 未设置CPU请求
+			"memory_request = 0 OR " + // 未设置内存请求
+			"cpu_limit = 0 OR " + // 未设置CPU限制
+			"memory_limit = 0" + // 未设置内存限制
 			")")
 	}
 
+	// 使用子查询去重，每个Pod只取最新的一条记录
+	// 先找出每个Pod组合的最大收集时间
+	subQuery := hs.db.Model(&models.PodMetricsHistory{}).
+		Select("cluster_id, namespace, pod_name, MAX(collected_at) as max_collected_at").
+		Group("cluster_id, namespace, pod_name")
+
+	// 应用相同的筛选条件到子查询
+	if req.ClusterID > 0 {
+		subQuery = subQuery.Where("cluster_id = ?", req.ClusterID)
+	}
+	if req.Namespace != "" {
+		subQuery = subQuery.Where("namespace = ?", req.Namespace)
+	}
+	if req.PodName != "" {
+		subQuery = subQuery.Where("pod_name LIKE ?", "%"+req.PodName+"%")
+	}
+	if !req.StartTime.IsZero() {
+		subQuery = subQuery.Where("collected_at >= ?", req.StartTime)
+	}
+	if !req.EndTime.IsZero() {
+		subQuery = subQuery.Where("collected_at <= ?", req.EndTime)
+	}
+	if req.OnlyProblems {
+		subQuery = subQuery.Where("(" +
+			"cpu_req_pct > 80 OR " +
+			"memory_req_pct > 80 OR " +
+			"cpu_limit_pct > 90 OR " +
+			"memory_limit_pct > 90 OR " +
+			"cpu_request = 0 OR " +
+			"memory_request = 0 OR " +
+			"cpu_limit = 0 OR " +
+			"memory_limit = 0" +
+			")")
+	}
+
+	// 通过JOIN获取完整记录，包含集群信息
+	deduplicatedQuery := hs.db.Model(&models.PodMetricsHistory{}).
+		Select("pod_metrics_history.*, cluster_configs.cluster_name as cluster_name").
+		Joins("INNER JOIN (?) as latest ON pod_metrics_history.cluster_id = latest.cluster_id AND pod_metrics_history.namespace = latest.namespace AND pod_metrics_history.pod_name = latest.pod_name AND pod_metrics_history.collected_at = latest.max_collected_at",
+			subQuery).
+		Joins("LEFT JOIN cluster_configs ON pod_metrics_history.cluster_id = cluster_configs.id")
+
 	// 计算总数
 	var total int64
-	if err := query.Count(&total).Error; err != nil {
+	if err := deduplicatedQuery.Count(&total).Error; err != nil {
 		return nil, fmt.Errorf("查询历史数据总数失败: %v", err)
 	}
 
@@ -171,15 +219,15 @@ func (hs *HistoryService) QueryHistory(req HistoryQueryRequest) (*HistoryQueryRe
 	if req.OrderDesc {
 		orderClause += " DESC"
 	}
-	query = query.Order(orderClause)
+	deduplicatedQuery = deduplicatedQuery.Order(orderClause)
 
 	// 使用统一分页逻辑计算偏移量
 	offset, limit := paginationHandler.CalculatePaginationOffset(paginationParams)
-	query = query.Offset(offset).Limit(limit)
+	deduplicatedQuery = deduplicatedQuery.Offset(offset).Limit(limit)
 
 	// 执行查询
-	var data []models.PodMetricsHistory
-	if err := query.Preload("Cluster").Find(&data).Error; err != nil {
+	var data []HistoryRecord
+	if err := deduplicatedQuery.Find(&data).Error; err != nil {
 		return nil, fmt.Errorf("查询历史数据失败: %v", err)
 	}
 
@@ -276,22 +324,22 @@ func (hs *HistoryService) GetStatistics() (map[string]interface{}, error) {
 
 // SystemTrendData 系统级趋势数据结构
 type SystemTrendData struct {
-	Time       string  `json:"time"`
-	CPUUsage   float64 `json:"cpu"`
+	Time        string  `json:"time"`
+	CPUUsage    float64 `json:"cpu"`
 	MemoryUsage float64 `json:"memory"`
-	PodCount   int     `json:"pods"`
+	PodCount    int     `json:"pods"`
 }
 
 // GetSystemTrendData 获取系统级聚合趋势数据 - 为Dashboard提供图表数据
 // 聚合所有集群的CPU、内存使用率平均值和Pod总数按时间分组
 func (hs *HistoryService) GetSystemTrendData(hours int) ([]SystemTrendData, error) {
 	startTime := time.Now().Add(-time.Duration(hours) * time.Hour)
-	
+
 	// 计算时间分组间隔 - 根据时间范围动态调整
 	var intervalMinutes int
 	switch {
 	case hours <= 1:
-		intervalMinutes = 5  // 1小时内，5分钟一个点
+		intervalMinutes = 5 // 1小时内，5分钟一个点
 	case hours <= 6:
 		intervalMinutes = 15 // 6小时内，15分钟一个点
 	case hours <= 24:
@@ -299,7 +347,7 @@ func (hs *HistoryService) GetSystemTrendData(hours int) ([]SystemTrendData, erro
 	default:
 		intervalMinutes = 240 // 7天内，4小时一个点
 	}
-	
+
 	// 构建SQL查询 - 按时间区间分组聚合数据
 	query := `
 		SELECT 
@@ -314,7 +362,7 @@ func (hs *HistoryService) GetSystemTrendData(hours int) ([]SystemTrendData, erro
 			FLOOR(UNIX_TIMESTAMP(collected_at) / (? * 60))
 		ORDER BY collected_at ASC
 	`
-	
+
 	type QueryResult struct {
 		TimeLabel      string    `json:"time_label"`
 		AvgCPUUsage    float64   `json:"avg_cpu_usage"`
@@ -322,12 +370,12 @@ func (hs *HistoryService) GetSystemTrendData(hours int) ([]SystemTrendData, erro
 		PodCount       int       `json:"pod_count"`
 		CollectedAt    time.Time `json:"collected_at"`
 	}
-	
+
 	var results []QueryResult
 	if err := hs.db.Raw(query, startTime, intervalMinutes).Scan(&results).Error; err != nil {
 		return nil, fmt.Errorf("查询系统趋势数据失败: %v", err)
 	}
-	
+
 	// 转换为前端期望的格式
 	var trendData []SystemTrendData
 	for _, result := range results {
@@ -338,12 +386,12 @@ func (hs *HistoryService) GetSystemTrendData(hours int) ([]SystemTrendData, erro
 			PodCount:    result.PodCount,
 		})
 	}
-	
+
 	// 如果没有历史数据，返回空数组
 	if len(trendData) == 0 {
 		return []SystemTrendData{}, nil
 	}
-	
+
 	return trendData, nil
 }
 
@@ -352,17 +400,18 @@ func (hs *HistoryService) GetSystemTrendData(hours int) ([]SystemTrendData, erro
 // 参数:
 //   - hours: 时间范围（小时）
 //   - clusterID: 集群ID，为nil时查询所有集群
+//
 // 返回:
 //   - []SystemTrendData: 系统趋势数据数组
 //   - error: 查询过程中的错误
 func (hs *HistoryService) GetSystemTrendDataWithCluster(hours int, clusterID *uint) ([]SystemTrendData, error) {
 	startTime := time.Now().Add(-time.Duration(hours) * time.Hour)
-	
+
 	// 计算时间分组间隔 - 根据时间范围动态调整
 	var intervalMinutes int
 	switch {
 	case hours <= 1:
-		intervalMinutes = 5  // 1小时内，5分钟一个点
+		intervalMinutes = 5 // 1小时内，5分钟一个点
 	case hours <= 6:
 		intervalMinutes = 15 // 6小时内，15分钟一个点
 	case hours <= 24:
@@ -370,11 +419,11 @@ func (hs *HistoryService) GetSystemTrendDataWithCluster(hours int, clusterID *ui
 	default:
 		intervalMinutes = 240 // 7天内，4小时一个点
 	}
-	
+
 	// 构建SQL查询 - 按时间区间分组聚合数据，支持集群筛选
 	var query string
 	var queryParams []interface{}
-	
+
 	if clusterID != nil {
 		// 筛选特定集群的数据
 		query = `
@@ -408,7 +457,7 @@ func (hs *HistoryService) GetSystemTrendDataWithCluster(hours int, clusterID *ui
 		`
 		queryParams = []interface{}{startTime, intervalMinutes}
 	}
-	
+
 	type QueryResult struct {
 		TimeLabel      string    `json:"time_label"`
 		AvgCPUUsage    float64   `json:"avg_cpu_usage"`
@@ -416,12 +465,12 @@ func (hs *HistoryService) GetSystemTrendDataWithCluster(hours int, clusterID *ui
 		PodCount       int       `json:"pod_count"`
 		CollectedAt    time.Time `json:"collected_at"`
 	}
-	
+
 	var results []QueryResult
 	if err := hs.db.Raw(query, queryParams...).Scan(&results).Error; err != nil {
 		return nil, fmt.Errorf("查询系统趋势数据失败: %v", err)
 	}
-	
+
 	// 转换为前端期望的格式
 	var trendData []SystemTrendData
 	for _, result := range results {
@@ -432,16 +481,14 @@ func (hs *HistoryService) GetSystemTrendDataWithCluster(hours int, clusterID *ui
 			PodCount:    result.PodCount,
 		})
 	}
-	
+
 	// 如果没有历史数据，返回空数组
 	if len(trendData) == 0 {
 		return []SystemTrendData{}, nil
 	}
-	
+
 	return trendData, nil
 }
-
-
 
 // GetLatestPodMetrics 获取最新的Pod指标数据 - 按Pod聚合获取最近时间范围内每个Pod的最新记录
 // 参数:
@@ -454,24 +501,24 @@ func (hs *HistoryService) GetSystemTrendDataWithCluster(hours int, clusterID *ui
 //   - error: 查询过程中的错误信息
 func (hs *HistoryService) GetLatestPodMetrics(clusterID uint, namespace string, duration time.Duration) ([]models.PodMetricsHistory, error) {
 	startTime := time.Now().Add(-duration)
-	
+
 	// 使用更简单的查询方式：直接获取指定时间范围内的最新记录
 	// 按Pod分组并获取每组的最新记录
 	query := hs.db.Model(&models.PodMetricsHistory{}).
 		Where("collected_at >= ? AND cluster_id = ?", startTime, clusterID)
-	
+
 	// 添加命名空间筛选条件
 	if namespace != "" {
 		query = query.Where("namespace = ?", namespace)
 	}
-	
+
 	// 获取所有符合条件的记录，然后在应用层去重
 	var allPods []models.PodMetricsHistory
 	err := query.Order("collected_at DESC").Find(&allPods).Error
 	if err != nil {
 		return nil, fmt.Errorf("查询Pod指标数据失败: %v", err)
 	}
-	
+
 	// 在应用层按Pod名称去重，保留最新记录
 	podMap := make(map[string]models.PodMetricsHistory)
 	for _, pod := range allPods {
@@ -480,12 +527,12 @@ func (hs *HistoryService) GetLatestPodMetrics(clusterID uint, namespace string, 
 			podMap[key] = pod
 		}
 	}
-	
+
 	// 转换为切片返回
 	var latestPods []models.PodMetricsHistory
 	for _, pod := range podMap {
 		latestPods = append(latestPods, pod)
 	}
-	
+
 	return latestPods, nil
 }
