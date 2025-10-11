@@ -142,7 +142,8 @@ func GetApiGroups(apiService *service.ApiService) gin.HandlerFunc {
 			return
 		}
 
-		response.Success(c, gin.H{"groups": groups})
+		// 直接返回groups数组
+		response.Success(c, groups)
 	}
 }
 
