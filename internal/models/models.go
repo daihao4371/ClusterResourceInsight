@@ -179,6 +179,7 @@ type AuditLog struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
 	UserID       uint      `gorm:"index;not null" json:"user_id"`                         // 操作用户ID
 	Username     string    `gorm:"size:50;index" json:"username"`                         // 用户名（冗余字段，便于查询）
+	RealName     string    `gorm:"size:50" json:"real_name"`                              // 真实姓名（冗余字段，便于查询）
 	OperateType  string    `gorm:"size:20;not null;index" json:"operate_type"`            // 操作类型：create/update/delete/query/login/logout
 	Module       string    `gorm:"size:50;index" json:"module"`                           // 操作模块
 	Resource     string    `gorm:"size:100" json:"resource"`                              // 操作资源

@@ -28,6 +28,7 @@ func NewAuditService() *AuditService {
 type CreateAuditLogRequest struct {
 	UserID       uint   `json:"user_id"`
 	Username     string `json:"username"`
+	RealName     string `json:"real_name"`
 	OperateType  string `json:"operate_type"`
 	Module       string `json:"module"`
 	Resource     string `json:"resource"`
@@ -51,6 +52,7 @@ func (s *AuditService) CreateAuditLog(req *CreateAuditLogRequest) error {
 	auditLog := &models.AuditLog{
 		UserID:       req.UserID,
 		Username:     req.Username,
+		RealName:     req.RealName,
 		OperateType:  req.OperateType,
 		Module:       req.Module,
 		Resource:     req.Resource,

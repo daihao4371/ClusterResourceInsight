@@ -64,7 +64,7 @@ func Login(userService *service.UserService) gin.HandlerFunc {
 		}
 
 		// 生成JWT token
-		token, err := utils.GenerateToken(user.ID, user.Username, roleCodes)
+		token, err := utils.GenerateToken(user.ID, user.Username, user.RealName, roleCodes)
 		if err != nil {
 			response.Error(c, 500, "生成Token失败")
 			return

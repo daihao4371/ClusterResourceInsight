@@ -15,7 +15,8 @@ var jwtSecret = []byte("ClusterResourceInsight-Secret-Key-2024")
 type Claims struct {
 	UserID   uint     `json:"user_id"`
 	Username string   `json:"username"`
-	Roles    []string `json:"roles"` // 角色代码列表
+	RealName string   `json:"real_name"` // 真实姓名
+	Roles    []string `json:"roles"`     // 角色代码列表
 	jwt.RegisteredClaims
 }
 
@@ -34,9 +35,10 @@ func CheckPassword(password, hash string) bool {
 // GenerateToken 生成JWT Token
 // userID: 用户ID
 // username: 用户名
+// realName: 真实姓名
 // roles: 用户角色代码列表
 // 返回: token字符串和可能的错误
-func GenerateToken(userID uint, username string, roles []string) (string, error) {
+func GenerateToken(userID uint, username string, realName string, roles []string) (string, error) {
 	// 设置过期时间为24小时
 	expirationTime := time.Now().Add(24 * time.Hour)
 
@@ -44,6 +46,7 @@ func GenerateToken(userID uint, username string, roles []string) (string, error)
 	claims := &Claims{
 		UserID:   userID,
 		Username: username,
+		RealName: realName,
 		Roles:    roles,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
@@ -99,5 +102,5 @@ func RefreshToken(tokenString string) (string, error) {
 	}
 
 	// 生成新token
-	return GenerateToken(claims.UserID, claims.Username, claims.Roles)
+	return GenerateToken(claims.UserID, claims.Username, claims.RealName, claims.Roles)
 }

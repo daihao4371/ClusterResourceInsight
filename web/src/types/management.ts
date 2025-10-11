@@ -118,6 +118,7 @@ export interface AuditLog {
   id: number
   user_id: number
   username: string
+  real_name: string
   operate_type: 'create' | 'update' | 'delete' | 'query' | 'login' | 'logout'
   module: string
   resource: string

@@ -256,12 +256,12 @@ func hashPassword(password string) (string, error) {
 	return string(hashedBytes), nil
 }
 
-// CheckAndAutoMigrate 检查数据库表是否存在，如果不存在则自动执行迁移
+// CheckAndAutoMigrate 检查数据库表是否存在,如果不存在则自动执行迁移,如果存在则自动更新表结构
 func CheckAndAutoMigrate() error {
 	// 检查关键表是否存在
 	logger.Info("正在检查数据库表是否存在...")
 	if !DB.Migrator().HasTable(&models.ClusterConfig{}) {
-		logger.Info("检测到数据库表不存在，正在自动执行迁移...")
+		logger.Info("检测到数据库表不存在,正在自动执行迁移...")
 		if err := MigrateDatabase(); err != nil {
 			return fmt.Errorf("自动迁移失败: %v\n\n"+
 				"请手动执行以下命令来创建数据库表:\n"+
@@ -271,7 +271,13 @@ func CheckAndAutoMigrate() error {
 		}
 		logger.Info("数据库表自动创建完成")
 	} else {
-		logger.Info("数据库表已存在，跳过迁移")
+		logger.Info("数据库表已存在,正在检查并更新表结构...")
+		// 表已存在,但仍然运行AutoMigrate以支持增量更新(如添加新列)
+		if err := MigrateDatabase(); err != nil {
+			logger.Warn("表结构更新失败: %v", err)
+		} else {
+			logger.Info("表结构检查完成")
+		}
 	}
 
 	return nil

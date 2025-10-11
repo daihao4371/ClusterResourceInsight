@@ -107,7 +107,7 @@
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                 {{ log.username }}
-                <div class="text-xs text-gray-500">ID: {{ log.user_id }}</div>
+                <div class="text-xs text-gray-500">{{ log.real_name || '-' }}</div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <span :class="getOperateTypeClass(log.operate_type)" class="px-2 py-1 text-xs rounded-full">
@@ -120,16 +120,16 @@
                 </span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono">
-                {{ log.ip_address || '-' }}
+                {{ log.ip || '-' }}
               </td>
               <td class="px-6 py-4 text-sm font-mono text-gray-700">
-                <div class="max-w-xs truncate" :title="log.request_path">
-                  {{ log.request_method }} {{ log.request_path }}
+                <div class="max-w-xs truncate" :title="log.path">
+                  {{ log.method }} {{ log.path }}
                 </div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <span :class="getStatusClass(log.status_code)" class="px-2 py-1 text-xs rounded">
-                  {{ log.status_code }}
+                <span :class="getStatusClass(log.response_code)" class="px-2 py-1 text-xs rounded">
+                  {{ log.response_code }}
                 </span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm">
@@ -182,11 +182,11 @@
             </div>
             <div>
               <label class="text-sm font-medium text-gray-500">用户信息</label>
-              <div class="mt-1 text-sm text-gray-900">{{ selectedLog.username }} (ID: {{ selectedLog.user_id }})</div>
+              <div class="mt-1 text-sm text-gray-900">{{ selectedLog.username }} ({{ selectedLog.real_name || '-' }})</div>
             </div>
             <div>
               <label class="text-sm font-medium text-gray-500">IP地址</label>
-              <div class="mt-1 text-sm text-gray-900 font-mono">{{ selectedLog.ip_address || '-' }}</div>
+              <div class="mt-1 text-sm text-gray-900 font-mono">{{ selectedLog.ip || '-' }}</div>
             </div>
             <div>
               <label class="text-sm font-medium text-gray-500">操作类型</label>
@@ -206,7 +206,7 @@
           <div>
             <label class="text-sm font-medium text-gray-500">请求路径</label>
             <div class="mt-1 text-sm text-gray-900 font-mono">
-              {{ selectedLog.request_method }} {{ selectedLog.request_path }}
+              {{ selectedLog.method }} {{ selectedLog.path }}
             </div>
           </div>
 
@@ -220,8 +220,8 @@
             <div>
               <label class="text-sm font-medium text-gray-500">响应状态</label>
               <div class="mt-1">
-                <span :class="getStatusClass(selectedLog.status_code)" class="px-2 py-1 text-xs rounded">
-                  {{ selectedLog.status_code }}
+                <span :class="getStatusClass(selectedLog.response_code)" class="px-2 py-1 text-xs rounded">
+                  {{ selectedLog.response_code }}
                 </span>
               </div>
             </div>
@@ -260,7 +260,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { Download, Loader2, FileText } from 'lucide-vue-next'
-import { queryAuditLogs, exportAuditLogs } from '../api/audit'
+import { getAuditLogs, exportAuditLogs } from '../api/audit'
 import type { AuditLog } from '../types/management'
 import dayjs from 'dayjs'
 
@@ -293,7 +293,7 @@ const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
 const loadLogs = async () => {
   loading.value = true
   try {
-    const res = await queryAuditLogs({
+    const res = await getAuditLogs({
       page: currentPage.value,
       page_size: pageSize.value,
       username: filters.value.username || undefined,

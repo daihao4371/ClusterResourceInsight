@@ -58,10 +58,14 @@ func QueryAuditLogs(auditService *service.AuditService) gin.HandlerFunc {
 			}
 		}
 
-		// 解析响应码
+		// 解析响应码(支持status_code和response_code两个参数名)
 		var responseCode *int
-		if responseCodeStr := c.Query("response_code"); responseCodeStr != "" {
-			if code, err := strconv.Atoi(responseCodeStr); err == nil {
+		statusCodeStr := c.Query("status_code")
+		if statusCodeStr == "" {
+			statusCodeStr = c.Query("response_code")
+		}
+		if statusCodeStr != "" {
+			if code, err := strconv.Atoi(statusCodeStr); err == nil {
 				responseCode = &code
 			}
 		}

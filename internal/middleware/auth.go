@@ -41,6 +41,7 @@ func JWTAuth() gin.HandlerFunc {
 		// 将用户信息注入到context
 		c.Set("user_id", claims.UserID)
 		c.Set("username", claims.Username)
+		c.Set("real_name", claims.RealName)
 		c.Set("roles", claims.Roles)
 
 		c.Next()

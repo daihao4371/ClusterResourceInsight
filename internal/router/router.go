@@ -28,9 +28,14 @@ func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollec
 	r.GET("/health", api.HealthCheck)
 
 	// ============== 需要认证的接口 ==============
+	// 创建审计服务（用于审计中间件）
+	auditService := service.NewAuditService()
+
 	// 应用JWT认证中间件
 	authenticated := r.Group("")
 	authenticated.Use(middleware.JWTAuth())
+	// 应用审计日志中间件（需要在JWTAuth之后，确保能获取到用户信息）
+	authenticated.Use(middleware.AuditMiddleware(auditService))
 	{
 		// 当前用户信息
 		authenticated.GET("/auth/me", api.GetCurrentUser(userService))
@@ -181,7 +186,6 @@ func SetupRoutes(r *gin.RouterGroup, resourceCollector *collector.ResourceCollec
 		}
 
 		// 审计日志接口
-		auditService := service.NewAuditService()
 		auditGroup := authenticated.Group("/audit")
 		{
 			auditGroup.GET("/logs", api.QueryAuditLogs(auditService))
