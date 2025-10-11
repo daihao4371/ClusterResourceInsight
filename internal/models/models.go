@@ -118,9 +118,83 @@ type SystemActivity struct {
 	Source      string    `gorm:"size:50" json:"source"`                         // 来源：collector/scheduler/api/system
 	Details     string    `gorm:"type:json" json:"details"`                      // 详细信息（JSON格式）
 	CreatedAt   time.Time `gorm:"index" json:"created_at"`
-	
+
 	// 外键关联
 	Cluster     ClusterConfig `gorm:"foreignKey:ClusterID" json:"cluster,omitempty"`
+}
+
+// User 用户表模型
+type User struct {
+	ID          uint           `gorm:"primaryKey" json:"id"`
+	Username    string         `gorm:"uniqueIndex;size:50;not null" json:"username"`      // 用户名，唯一索引
+	Password    string         `gorm:"size:255;not null" json:"-"`                        // 密码哈希，不返回给前端
+	Email       string         `gorm:"uniqueIndex;size:100" json:"email"`                 // 邮箱，唯一索引
+	RealName    string         `gorm:"size:50" json:"real_name"`                          // 真实姓名
+	Phone       string         `gorm:"size:20" json:"phone"`                              // 手机号
+	Status      string         `gorm:"size:20;default:'active'" json:"status"`            // 状态：active/inactive/locked
+	LastLoginAt *time.Time     `json:"last_login_at"`                                     // 最后登录时间
+	LastLoginIP string         `gorm:"size:50" json:"last_login_ip"`                      // 最后登录IP
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`                                    // 软删除
+
+	// 多对多关联
+	Roles       []Role         `gorm:"many2many:user_roles;" json:"roles,omitempty"`      // 用户角色关联
+}
+
+// Role 角色表模型
+type Role struct {
+	ID          uint           `gorm:"primaryKey" json:"id"`
+	RoleName    string         `gorm:"uniqueIndex;size:50;not null" json:"role_name"`     // 角色名称，唯一索引
+	RoleCode    string         `gorm:"uniqueIndex;size:50;not null" json:"role_code"`     // 角色编码，唯一索引
+	Description string         `gorm:"size:255" json:"description"`                       // 角色描述
+	Permissions string         `gorm:"type:json" json:"permissions"`                      // 权限列表（JSON数组）
+	IsSystem    bool           `gorm:"default:false" json:"is_system"`                    // 是否为系统内置角色
+	Status      string         `gorm:"size:20;default:'active'" json:"status"`            // 状态：active/inactive
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`                                    // 软删除
+
+	// 多对多关联
+	Users       []User         `gorm:"many2many:user_roles;" json:"users,omitempty"`      // 角色用户关联
+}
+
+// ApiEndpoint API接口表模型
+type ApiEndpoint struct {
+	ID          uint           `gorm:"primaryKey" json:"id"`
+	Path        string         `gorm:"size:255;not null;index" json:"path"`               // API路径
+	Method      string         `gorm:"size:10;not null;index" json:"method"`              // HTTP方法：GET/POST/PUT/DELETE
+	Group       string         `gorm:"size:50;index" json:"group"`                        // API分组
+	Description string         `gorm:"size:255" json:"description"`                       // 接口描述
+	Permission  string         `gorm:"size:100" json:"permission"`                        // 所需权限标识
+	IsPublic    bool           `gorm:"default:false" json:"is_public"`                    // 是否为公开接口
+	Status      string         `gorm:"size:20;default:'active'" json:"status"`            // 状态：active/inactive
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`                                    // 软删除
+}
+
+// AuditLog 操作审计日志表模型
+type AuditLog struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	UserID       uint      `gorm:"index;not null" json:"user_id"`                         // 操作用户ID
+	Username     string    `gorm:"size:50;index" json:"username"`                         // 用户名（冗余字段，便于查询）
+	OperateType  string    `gorm:"size:20;not null;index" json:"operate_type"`            // 操作类型：create/update/delete/query/login/logout
+	Module       string    `gorm:"size:50;index" json:"module"`                           // 操作模块
+	Resource     string    `gorm:"size:100" json:"resource"`                              // 操作资源
+	ResourceID   string    `gorm:"size:100;index" json:"resource_id"`                     // 资源ID
+	Method       string    `gorm:"size:10" json:"method"`                                 // HTTP方法
+	Path         string    `gorm:"size:255;index" json:"path"`                            // 请求路径
+	RequestBody  string    `gorm:"type:text" json:"request_body"`                         // 请求体（敏感信息已脱敏）
+	ResponseCode int       `gorm:"index" json:"response_code"`                            // 响应状态码
+	IP           string    `gorm:"size:50;index" json:"ip"`                               // 操作IP
+	UserAgent    string    `gorm:"size:255" json:"user_agent"`                            // User-Agent
+	ErrorMsg     string    `gorm:"type:text" json:"error_msg"`                            // 错误信息
+	Duration     int64     `json:"duration"`                                              // 执行耗时（毫秒）
+	CreatedAt    time.Time `gorm:"index" json:"created_at"`                               // 操作时间
+
+	// 外键关联
+	User         User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
 // TableName 指定表名
@@ -146,4 +220,20 @@ func (AlertHistory) TableName() string {
 
 func (SystemActivity) TableName() string {
 	return "system_activities"
+}
+
+func (User) TableName() string {
+	return "users"
+}
+
+func (Role) TableName() string {
+	return "roles"
+}
+
+func (ApiEndpoint) TableName() string {
+	return "api_endpoints"
+}
+
+func (AuditLog) TableName() string {
+	return "audit_logs"
 }

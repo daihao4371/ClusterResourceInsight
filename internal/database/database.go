@@ -6,7 +6,8 @@ import (
 
 	"cluster-resource-insight/internal/logger"
 	"cluster-resource-insight/internal/models"
-	
+
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -91,6 +92,10 @@ func MigrateDatabase() error {
 		&models.AlertRule{},
 		&models.AlertHistory{},
 		&models.SystemActivity{},
+		&models.User{},
+		&models.Role{},
+		&models.ApiEndpoint{},
+		&models.AuditLog{},
 	)
 	if err != nil {
 		return fmt.Errorf("数据库迁移失败: %v", err)
@@ -99,6 +104,11 @@ func MigrateDatabase() error {
 	// 初始化默认系统配置
 	if err := initDefaultSettings(); err != nil {
 		return fmt.Errorf("初始化默认配置失败: %v", err)
+	}
+
+	// 初始化默认角色和用户
+	if err := initDefaultRolesAndUsers(); err != nil {
+		return fmt.Errorf("初始化默认角色和用户失败: %v", err)
 	}
 
 	logger.Info("数据库迁移完成")
@@ -160,6 +170,90 @@ func initDefaultSettings() error {
 	}
 
 	return nil
+}
+
+// initDefaultRolesAndUsers 初始化默认角色和用户
+func initDefaultRolesAndUsers() error {
+	// 检查是否已经初始化过
+	var roleCount int64
+	DB.Model(&models.Role{}).Count(&roleCount)
+	if roleCount > 0 {
+		logger.Info("默认角色已存在，跳过初始化")
+		return nil
+	}
+
+	// 创建超级管理员角色
+	adminRole := models.Role{
+		RoleName:    "超级管理员",
+		RoleCode:    "admin",
+		Description: "系统超级管理员，拥有所有权限",
+		Permissions: `["*"]`,
+		IsSystem:    true,
+		Status:      "active",
+	}
+	if err := DB.Create(&adminRole).Error; err != nil {
+		return fmt.Errorf("创建管理员角色失败: %v", err)
+	}
+	logger.Info("创建默认角色: 超级管理员")
+
+	// 创建普通用户角色
+	userRole := models.Role{
+		RoleName:    "普通用户",
+		RoleCode:    "user",
+		Description: "普通用户，只有查看权限",
+		Permissions: `["read"]`,
+		IsSystem:    true,
+		Status:      "active",
+	}
+	if err := DB.Create(&userRole).Error; err != nil {
+		return fmt.Errorf("创建普通用户角色失败: %v", err)
+	}
+	logger.Info("创建默认角色: 普通用户")
+
+	// 检查是否已经有管理员用户
+	var userCount int64
+	DB.Model(&models.User{}).Count(&userCount)
+	if userCount > 0 {
+		logger.Info("默认用户已存在，跳过初始化")
+		return nil
+	}
+
+	// 创建默认管理员用户（密码: admin123）
+	// 注意：需要导入 golang.org/x/crypto/bcrypt
+	hashedPassword, err := hashPassword("admin123")
+	if err != nil {
+		return fmt.Errorf("密码加密失败: %v", err)
+	}
+
+	adminUser := models.User{
+		Username: "admin",
+		Password: hashedPassword,
+		Email:    "admin@example.com",
+		RealName: "系统管理员",
+		Status:   "active",
+	}
+	if err := DB.Create(&adminUser).Error; err != nil {
+		return fmt.Errorf("创建管理员用户失败: %v", err)
+	}
+
+	// 关联管理员角色
+	if err := DB.Model(&adminUser).Association("Roles").Append(&adminRole); err != nil {
+		return fmt.Errorf("关联管理员角色失败: %v", err)
+	}
+
+	logger.Info("创建默认用户: admin (密码: admin123)")
+	logger.Info("⚠️  请在首次登录后立即修改默认密码！")
+
+	return nil
+}
+
+// hashPassword 密码加密辅助函数
+func hashPassword(password string) (string, error) {
+	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hashedBytes), nil
 }
 
 // CheckAndAutoMigrate 检查数据库表是否存在，如果不存在则自动执行迁移

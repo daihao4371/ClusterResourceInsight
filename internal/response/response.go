@@ -97,3 +97,22 @@ func InternalServerError(message string, c *gin.Context) {
 		Msg:  message,
 	})
 }
+
+// Success 成功响应（简化版本）
+func Success(c *gin.Context, data interface{}) {
+	Result(SUCCESS, data, "操作成功", c)
+}
+
+// SuccessWithData 成功响应并返回数据（简化版本）
+func SuccessWithData(c *gin.Context, data interface{}) {
+	Result(SUCCESS, data, "操作成功", c)
+}
+
+// Error 错误响应（带HTTP状态码）
+func Error(c *gin.Context, httpCode int, message string) {
+	c.JSON(httpCode, Response{
+		Code: ERROR,
+		Data: nil,
+		Msg:  message,
+	})
+}

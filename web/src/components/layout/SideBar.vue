@@ -99,14 +99,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { 
-  LayoutDashboard, 
-  Server, 
-  Box, 
-  BarChart3, 
-  History, 
+import {
+  LayoutDashboard,
+  Server,
+  Box,
+  BarChart3,
+  History,
   Calendar,
-  Activity
+  Activity,
+  Users,
+  Shield,
+  Globe,
+  FileText
 } from 'lucide-vue-next'
 import { useSystemStore } from '../../stores/system'
 
@@ -152,6 +156,40 @@ const navigationItems = computed(() => [
     path: '/schedule',
     label: '调度管理',
     icon: Calendar,
+  },
+  {
+    name: 'Alerts',
+    path: '/alerts',
+    label: '系统告警',
+    icon: Activity,
+  },
+  // 系统管理分组
+  {
+    name: 'Users',
+    path: '/users',
+    label: '用户管理',
+    icon: Users,
+    isNew: true
+  },
+  {
+    name: 'Roles',
+    path: '/roles',
+    label: '角色管理',
+    icon: Shield,
+    isNew: true
+  },
+  {
+    name: 'Apis',
+    path: '/apis',
+    label: 'API管理',
+    icon: Globe,
+    isNew: true
+  },
+  {
+    name: 'AuditLogs',
+    path: '/audit',
+    label: '审计日志',
+    icon: FileText,
     isNew: true
   }
 ])
