@@ -49,6 +49,14 @@ func Login(userService *service.UserService) gin.HandlerFunc {
 			return
 		}
 
+		// 更新最后登录信息（登录时间和IP）
+		clientIP := c.ClientIP()
+		if err := userService.UpdateLoginInfo(user.ID, clientIP); err != nil {
+			// 更新登录信息失败不影响登录流程，只记录日志
+			// 在生产环境应该使用专门的日志系统
+			println("更新登录信息失败:", err.Error())
+		}
+
 		// 提取角色代码列表
 		roleCodes := make([]string, 0, len(user.Roles))
 		for _, role := range user.Roles {
