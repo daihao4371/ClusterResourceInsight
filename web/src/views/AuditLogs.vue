@@ -4,11 +4,53 @@
     <div class="bg-white border-b border-gray-200 px-6 py-4">
       <div class="flex items-center justify-between">
         <h1 class="text-2xl font-bold text-gray-900">审计日志</h1>
-        <button @click="handleExport" :disabled="exporting"
-          class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
-          <Download class="w-4 h-4 inline-block mr-1" />
-          {{ exporting ? '导出中...' : '导出日志' }}
-        </button>
+        <div class="flex gap-2">
+          <button @click="openStatsDialog"
+            class="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors">
+            <BarChart3 class="w-4 h-4 inline-block mr-1" />
+            统计分析
+          </button>
+          <button @click="showCleanupDialog = true"
+            class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+            <Trash2 class="w-4 h-4 inline-block mr-1" />
+            清理日志
+          </button>
+          <button @click="handleExport" :disabled="exporting"
+            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
+            <Download class="w-4 h-4 inline-block mr-1" />
+            {{ exporting ? '导出中...' : '导出日志' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div v-if="statistics" class="bg-white border-b border-gray-200 px-6 py-4">
+      <div class="grid grid-cols-6 gap-4">
+        <div class="bg-blue-50 rounded-lg p-4">
+          <div class="text-sm text-blue-600 font-medium">总记录数</div>
+          <div class="text-2xl font-bold text-blue-700 mt-1">{{ statistics.total }}</div>
+        </div>
+        <div class="bg-green-50 rounded-lg p-4">
+          <div class="text-sm text-green-600 font-medium">成功请求</div>
+          <div class="text-2xl font-bold text-green-700 mt-1">{{ statistics.total - statistics.error_count }}</div>
+        </div>
+        <div class="bg-red-50 rounded-lg p-4">
+          <div class="text-sm text-red-600 font-medium">错误请求</div>
+          <div class="text-2xl font-bold text-red-700 mt-1">{{ statistics.error_count }}</div>
+        </div>
+        <div class="bg-yellow-50 rounded-lg p-4">
+          <div class="text-sm text-yellow-600 font-medium">慢请求</div>
+          <div class="text-2xl font-bold text-yellow-700 mt-1">{{ statistics.slow_request_count }}</div>
+        </div>
+        <div class="bg-indigo-50 rounded-lg p-4">
+          <div class="text-sm text-indigo-600 font-medium">平均耗时</div>
+          <div class="text-2xl font-bold text-indigo-700 mt-1">{{ Math.round(statistics.avg_duration) }}ms</div>
+        </div>
+        <div class="bg-purple-50 rounded-lg p-4">
+          <div class="text-sm text-purple-600 font-medium">活跃用户</div>
+          <div class="text-2xl font-bold text-purple-700 mt-1">{{ statistics.by_user?.length || 0 }}</div>
+        </div>
       </div>
     </div>
 
@@ -254,25 +296,125 @@
         </div>
       </div>
     </div>
+
+    <!-- 统计分析弹窗 -->
+    <div v-if="showStatsDialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-6xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+        <div class="px-6 py-4 border-b flex items-center justify-between">
+          <h2 class="text-xl font-bold">审计统计分析</h2>
+          <button @click="showStatsDialog = false" class="text-gray-400 hover:text-gray-600">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+        <div v-if="detailedStats" class="px-6 py-4 flex-1 overflow-y-auto space-y-6">
+          <!-- 操作类型统计 -->
+          <div>
+            <h3 class="text-lg font-semibold mb-3">操作类型分布</h3>
+            <div class="grid grid-cols-3 gap-4">
+              <div v-for="item in detailedStats.by_operate_type" :key="item.operate_type"
+                class="border rounded-lg p-4">
+                <div class="text-sm text-gray-600">{{ getOperateTypeName(item.operate_type) }}</div>
+                <div class="text-2xl font-bold text-gray-900 mt-1">{{ item.count }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 模块统计 -->
+          <div>
+            <h3 class="text-lg font-semibold mb-3">模块访问统计 (Top 10)</h3>
+            <div class="grid grid-cols-5 gap-4">
+              <div v-for="item in detailedStats.by_module" :key="item.module"
+                class="border rounded-lg p-4">
+                <div class="text-sm text-gray-600">{{ item.module || '未知' }}</div>
+                <div class="text-2xl font-bold text-blue-600 mt-1">{{ item.count }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 用户活动统计 -->
+          <div>
+            <h3 class="text-lg font-semibold mb-3">活跃用户统计 (Top 10)</h3>
+            <div class="grid grid-cols-5 gap-4">
+              <div v-for="item in detailedStats.by_user" :key="item.username"
+                class="border rounded-lg p-4">
+                <div class="text-sm text-gray-600 truncate" :title="item.username">{{ item.username }}</div>
+                <div class="text-2xl font-bold text-purple-600 mt-1">{{ item.count }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 状态码统计 -->
+          <div>
+            <h3 class="text-lg font-semibold mb-3">HTTP状态码分布</h3>
+            <div class="grid grid-cols-4 gap-4">
+              <div v-for="item in detailedStats.by_status" :key="item.response_code"
+                class="border rounded-lg p-4">
+                <div class="text-sm text-gray-600">状态码 {{ item.response_code }}</div>
+                <div class="text-2xl font-bold mt-1"
+                  :class="item.response_code >= 400 ? 'text-red-600' : 'text-green-600'">
+                  {{ item.count }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="px-6 py-4 border-t flex justify-end">
+          <button @click="showStatsDialog = false" class="px-4 py-2 border rounded-lg hover:bg-gray-50">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 清理日志弹窗 -->
+    <div v-if="showCleanupDialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+        <div class="px-6 py-4 border-b">
+          <h2 class="text-xl font-bold">清理旧日志</h2>
+        </div>
+        <div class="px-6 py-4">
+          <p class="text-gray-600 mb-4">清理指定天数之前的审计日志，此操作不可恢复。</p>
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">保留天数</label>
+            <input v-model.number="cleanupDays" type="number" min="1"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+              placeholder="输入保留天数（默认90天）">
+            <p class="text-sm text-gray-500 mt-2">将删除 {{ cleanupDays }} 天之前的所有审计日志</p>
+          </div>
+        </div>
+        <div class="px-6 py-4 border-t flex justify-end gap-2">
+          <button @click="showCleanupDialog = false"
+            class="px-4 py-2 border rounded-lg hover:bg-gray-50">取消</button>
+          <button @click="handleCleanup" :disabled="cleaning"
+            class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">
+            {{ cleaning ? '清理中...' : '确认清理' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { Download, Loader2, FileText } from 'lucide-vue-next'
-import { getAuditLogs, exportAuditLogs } from '../api/audit'
-import type { AuditLog } from '../types/management'
+import { Download, Loader2, FileText, BarChart3, Trash2, X } from 'lucide-vue-next'
+import { getAuditLogs, exportAuditLogs, getAuditStatistics, cleanupOldLogs } from '../api/audit'
+import type { AuditLog, AuditStatistics } from '../types/management'
 import dayjs from 'dayjs'
 
 // 状态
 const loading = ref(false)
 const exporting = ref(false)
+const cleaning = ref(false)
 const logs = ref<AuditLog[]>([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const showDetailDialog = ref(false)
+const showStatsDialog = ref(false)
+const showCleanupDialog = ref(false)
 const selectedLog = ref<AuditLog | null>(null)
+const statistics = ref<AuditStatistics | null>(null)
+const detailedStats = ref<AuditStatistics | null>(null)
+const cleanupDays = ref(90)
 
 // 筛选条件
 const filters = ref({
@@ -454,8 +596,59 @@ const getDurationClass = (duration: number) => {
   return 'text-red-600 font-semibold'
 }
 
+// 加载统计数据
+const loadStatistics = async () => {
+  try {
+    const res = await getAuditStatistics({
+      start_time: filters.value.start_time || undefined,
+      end_time: filters.value.end_time || undefined
+    })
+    statistics.value = res.data.data
+  } catch (error) {
+    console.error('加载统计数据失败:', error)
+  }
+}
+
+// 打开统计弹窗时加载详细统计
+const openStatsDialog = async () => {
+  showStatsDialog.value = true
+  try {
+    const res = await getAuditStatistics({
+      start_time: filters.value.start_time || undefined,
+      end_time: filters.value.end_time || undefined
+    })
+    detailedStats.value = res.data.data
+  } catch (error) {
+    console.error('加载详细统计失败:', error)
+    alert('加载统计数据失败')
+  }
+}
+
+// 清理旧日志
+const handleCleanup = async () => {
+  if (cleaning.value) return
+
+  const confirmed = confirm(`确定要删除 ${cleanupDays.value} 天之前的所有审计日志吗？此操作不可恢复！`)
+  if (!confirmed) return
+
+  cleaning.value = true
+  try {
+    const res = await cleanupOldLogs(cleanupDays.value)
+    alert(`清理成功，共删除 ${res.data.data.deleted_count} 条记录`)
+    showCleanupDialog.value = false
+    // 重新加载日志和统计
+    loadLogs()
+    loadStatistics()
+  } catch (error: any) {
+    alert(error.response?.data?.msg || '清理失败')
+  } finally {
+    cleaning.value = false
+  }
+}
+
 // 初始化
 onMounted(() => {
   loadLogs()
+  loadStatistics()
 })
 </script>

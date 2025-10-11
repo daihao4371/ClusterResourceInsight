@@ -250,17 +250,21 @@ func (s *AuditService) GetUserAuditLogs(userID uint, page, pageSize int) ([]mode
 func (s *AuditService) GetAuditStatistics(startTime, endTime *time.Time) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
-	query := s.db.Model(&models.AuditLog{})
-	if startTime != nil {
-		query = query.Where("created_at >= ?", *startTime)
-	}
-	if endTime != nil {
-		query = query.Where("created_at <= ?", *endTime)
+	// 构建基础查询条件的辅助函数
+	buildBaseQuery := func() *gorm.DB {
+		query := s.db.Model(&models.AuditLog{})
+		if startTime != nil {
+			query = query.Where("created_at >= ?", *startTime)
+		}
+		if endTime != nil {
+			query = query.Where("created_at <= ?", *endTime)
+		}
+		return query
 	}
 
 	// 总数统计
 	var total int64
-	if err := query.Count(&total).Error; err != nil {
+	if err := buildBaseQuery().Count(&total).Error; err != nil {
 		return nil, fmt.Errorf("统计审计日志总数失败: %v", err)
 	}
 	stats["total"] = total
@@ -270,7 +274,7 @@ func (s *AuditService) GetAuditStatistics(startTime, endTime *time.Time) (map[st
 		OperateType string `json:"operate_type"`
 		Count       int64  `json:"count"`
 	}
-	if err := query.Select("operate_type, COUNT(*) as count").
+	if err := buildBaseQuery().Select("operate_type, COUNT(*) as count").
 		Group("operate_type").
 		Find(&typeStats).Error; err != nil {
 		return nil, fmt.Errorf("统计操作类型失败: %v", err)
@@ -282,7 +286,7 @@ func (s *AuditService) GetAuditStatistics(startTime, endTime *time.Time) (map[st
 		Module string `json:"module"`
 		Count  int64  `json:"count"`
 	}
-	if err := query.Select("module, COUNT(*) as count").
+	if err := buildBaseQuery().Select("module, COUNT(*) as count").
 		Where("module != ''").
 		Group("module").
 		Order("count DESC").
@@ -297,7 +301,7 @@ func (s *AuditService) GetAuditStatistics(startTime, endTime *time.Time) (map[st
 		Username string `json:"username"`
 		Count    int64  `json:"count"`
 	}
-	if err := query.Select("username, COUNT(*) as count").
+	if err := buildBaseQuery().Select("username, COUNT(*) as count").
 		Where("username != ''").
 		Group("username").
 		Order("count DESC").
@@ -312,7 +316,7 @@ func (s *AuditService) GetAuditStatistics(startTime, endTime *time.Time) (map[st
 		ResponseCode int   `json:"response_code"`
 		Count        int64 `json:"count"`
 	}
-	if err := query.Select("response_code, COUNT(*) as count").
+	if err := buildBaseQuery().Select("response_code, COUNT(*) as count").
 		Group("response_code").
 		Order("count DESC").
 		Find(&statusStats).Error; err != nil {
@@ -322,7 +326,7 @@ func (s *AuditService) GetAuditStatistics(startTime, endTime *time.Time) (map[st
 
 	// 平均耗时
 	var avgDuration float64
-	if err := query.Select("AVG(duration) as avg_duration").
+	if err := buildBaseQuery().Select("AVG(duration) as avg_duration").
 		Scan(&avgDuration).Error; err != nil {
 		return nil, fmt.Errorf("统计平均耗时失败: %v", err)
 	}
@@ -330,14 +334,14 @@ func (s *AuditService) GetAuditStatistics(startTime, endTime *time.Time) (map[st
 
 	// 慢请求统计（耗时超过1秒）
 	var slowCount int64
-	if err := query.Where("duration > ?", 1000).Count(&slowCount).Error; err != nil {
+	if err := buildBaseQuery().Where("duration > ?", 1000).Count(&slowCount).Error; err != nil {
 		return nil, fmt.Errorf("统计慢请求失败: %v", err)
 	}
 	stats["slow_request_count"] = slowCount
 
 	// 错误请求统计（4xx和5xx）
 	var errorCount int64
-	if err := query.Where("response_code >= ?", 400).Count(&errorCount).Error; err != nil {
+	if err := buildBaseQuery().Where("response_code >= ?", 400).Count(&errorCount).Error; err != nil {
 		return nil, fmt.Errorf("统计错误请求失败: %v", err)
 	}
 	stats["error_count"] = errorCount
