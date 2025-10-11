@@ -135,7 +135,7 @@ func (s *ApiService) ListApis(page, pageSize int, keyword, group, method, status
 
 	// 分页查询
 	offset := (page - 1) * pageSize
-	if err := query.Order("group ASC, path ASC, method ASC").
+	if err := query.Order("`group` ASC, path ASC, method ASC").
 		Limit(pageSize).
 		Offset(offset).
 		Find(&apis).Error; err != nil {
@@ -233,10 +233,10 @@ func (s *ApiService) DeleteApi(id uint) error {
 func (s *ApiService) GetApiGroups() ([]string, error) {
 	var groups []string
 	if err := s.db.Model(&models.ApiEndpoint{}).
-		Distinct("group").
-		Where("group != ''").
-		Order("group ASC").
-		Pluck("group", &groups).Error; err != nil {
+		Distinct("`group`").
+		Where("`group` != ''").
+		Order("`group` ASC").
+		Pluck("`group`", &groups).Error; err != nil {
 		return nil, fmt.Errorf("查询API分组失败: %v", err)
 	}
 	return groups, nil

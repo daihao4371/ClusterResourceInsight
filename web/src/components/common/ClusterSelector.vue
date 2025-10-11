@@ -77,6 +77,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { Server, RefreshCw, AlertCircle } from 'lucide-vue-next'
+import axios from 'axios'
 
 // 集群接口定义
 interface Cluster {
@@ -141,15 +142,10 @@ const loadClusters = async () => {
   try {
     loading.value = true
     error.value = null
-    
-    const response = await fetch('/api/clusters')
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-    
-    const data = await response.json()
-    
+
+    const response = await axios.get('/api/clusters')
+    const data = response.data
+
     // 处理后端统一响应格式
     if (data.code === 0 && data.data) {
       // 适配不同的数据结构 - 可能是 data.data 或 data.data.data
@@ -159,7 +155,7 @@ const loadClusters = async () => {
       } else if (Array.isArray(data.data)) {
         clusterList = data.data
       }
-      
+
       // 转换为统一格式，确保有正确的id字段
       clusters.value = clusterList.map((cluster: any) => ({
         id: cluster.id || cluster.cluster_id, // 支持不同的ID字段名
@@ -169,7 +165,7 @@ const loadClusters = async () => {
         nodes_count: cluster.nodes_count || cluster.node_count || 0,
         pods_count: cluster.pods_count || cluster.pod_count || 0
       }))
-      
+
       console.log('集群列表加载成功:', clusters.value.length, '个集群', clusters.value)
     } else {
       throw new Error(data.message || '获取集群列表失败')
@@ -177,7 +173,7 @@ const loadClusters = async () => {
   } catch (err) {
     error.value = err instanceof Error ? err.message : '加载集群列表失败'
     console.error('加载集群列表失败:', err)
-    
+
     // 提供默认的备用数据
     clusters.value = []
   } finally {
