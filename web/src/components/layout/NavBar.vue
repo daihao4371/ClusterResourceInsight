@@ -34,9 +34,9 @@
       <div class="flex items-center space-x-3">
         <!-- 主题切换器 -->
         <ThemeSwitcher />
-        
+
         <!-- 刷新按钮 -->
-        <button 
+        <button
           @click="refreshData"
           :disabled="isRefreshing"
           class="btn-secondary p-1.5 w-8 h-8 flex items-center justify-center"
@@ -44,21 +44,51 @@
         >
           <RotateCw class="w-3.5 h-3.5" />
         </button>
-        
+
         <!-- 设置按钮 -->
         <button class="btn-secondary p-1.5 w-8 h-8 flex items-center justify-center">
           <Settings class="w-3.5 h-3.5" />
         </button>
-        
+
         <!-- 通知中心 -->
         <div class="relative">
           <button class="btn-secondary p-1.5 w-8 h-8 flex items-center justify-center">
             <Bell class="w-3.5 h-3.5" />
-            <span v-if="notificationCount > 0" 
+            <span v-if="notificationCount > 0"
                   class="absolute -top-1 -right-1 bg-danger-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center text-xs">
               {{ notificationCount }}
             </span>
           </button>
+        </div>
+
+        <!-- 用户菜单 -->
+        <div class="relative">
+          <button
+            @click="showUserMenu = !showUserMenu"
+            class="flex items-center space-x-2 btn-secondary px-3 py-1.5"
+          >
+            <UserCircle class="w-4 h-4" />
+            <span class="text-sm">{{ authStore.username }}</span>
+            <ChevronDown class="w-3 h-3" />
+          </button>
+
+          <!-- 下拉菜单 -->
+          <div
+            v-if="showUserMenu"
+            class="absolute right-0 mt-2 w-48 glass-card border border-white/10 rounded-lg shadow-lg py-2 z-50"
+          >
+            <div class="px-4 py-2 border-b border-white/10">
+              <p class="text-sm font-medium text-white">{{ authStore.userInfo?.realName || authStore.username }}</p>
+              <p class="text-xs text-gray-400">{{ authStore.userInfo?.email }}</p>
+            </div>
+            <button
+              @click="handleLogout"
+              class="w-full px-4 py-2 text-sm text-left hover:bg-white/5 flex items-center space-x-2 text-red-400 hover:text-red-300"
+            >
+              <LogOut class="w-4 h-4" />
+              <span>退出登录</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -67,14 +97,19 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { RotateCw, Settings, Bell } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
+import { RotateCw, Settings, Bell, UserCircle, ChevronDown, LogOut } from 'lucide-vue-next'
 import { useSystemStore } from '../../stores/system'
+import { useAuthStore } from '../../stores/auth'
 import { formatDistanceToNow } from '../../utils/date'
 import ThemeSwitcher from '../common/ThemeSwitcher.vue'
 
+const router = useRouter()
 const systemStore = useSystemStore()
+const authStore = useAuthStore()
 const isRefreshing = ref(false)
 const notificationCount = ref(0)
+const showUserMenu = ref(false)
 
 // 系统状态计算属性
 const systemStatusClass = computed(() => {
@@ -98,12 +133,27 @@ const lastUpdateTime = computed(() => {
 // 刷新数据
 const refreshData = async () => {
   if (isRefreshing.value) return
-  
+
   isRefreshing.value = true
   try {
     await systemStore.fetchStats()
   } finally {
     isRefreshing.value = false
+  }
+}
+
+// 退出登录
+const handleLogout = async () => {
+  showUserMenu.value = false
+  await authStore.logout()
+  router.push('/login')
+}
+
+// 点击外部关闭菜单
+const handleClickOutside = (event: MouseEvent) => {
+  const target = event.target as HTMLElement
+  if (!target.closest('.relative')) {
+    showUserMenu.value = false
   }
 }
 
@@ -113,16 +163,20 @@ let refreshInterval: number
 onMounted(() => {
   // 初始加载数据
   systemStore.fetchStats()
-  
+
   // 每30秒自动刷新
   refreshInterval = setInterval(() => {
     systemStore.fetchStats()
   }, 30000)
+
+  // 监听点击外部关闭菜单
+  document.addEventListener('click', handleClickOutside)
 })
 
 onUnmounted(() => {
   if (refreshInterval) {
     clearInterval(refreshInterval)
   }
+  document.removeEventListener('click', handleClickOutside)
 })
 </script>

@@ -32,7 +32,7 @@ export function useClusters() {
       // 确保返回的数据是数组格式 - 修复数据结构访问路径
       if (response.data && response.data.data && response.data.data.data && Array.isArray(response.data.data.data)) {
         clusters.value = response.data.data.data // 正确的数据路径：response.data.data.data
-        console.log('成功获取集群数据:', clusters.value.length, '个集群', clusters.value.map(c => c.cluster_name))
+        console.log('成功获取集群数据:', clusters.value.length, '个集群', clusters.value.map((c: any) => c.name || c.cluster_name))
       } else {
         clusters.value = []
         console.warn('集群数据格式异常，期望的数据结构:', {
@@ -173,13 +173,55 @@ export function useHistory() {
     try {
       loading.value = true
       error.value = null
-      const response = await api.post<ApiResponse<HistoryQueryResponse>>('/history/query', params)
-      history.value = response.data.data.data
-      total.value = response.data.data.total
-      return response.data.data
+      
+      // 构建查询参数，过滤掉空值
+      const queryParams: any = {}
+      if (params.cluster_id) queryParams.cluster_id = params.cluster_id
+      if (params.namespace) queryParams.namespace = params.namespace
+      if (params.pod_name) queryParams.pod_name = params.pod_name
+      if (params.start_time) queryParams.start_time = params.start_time
+      if (params.end_time) queryParams.end_time = params.end_time
+      queryParams.page = params.page
+      queryParams.size = params.size
+      queryParams.only_problems = params.only_problems || false
+      
+      // 使用GET请求传递查询参数
+      const response = await api.get<ApiResponse<HistoryQueryResponse>>('/history/query', {
+        params: queryParams
+      })
+      
+      console.log('历史数据API响应:', response.data)
+      
+      // 修正数据路径访问
+      if (response.data && response.data.data) {
+        let historyRecords = response.data.data.data || []
+        
+        // 前端去重保护 - 基于集群ID、命名空间、Pod名称的唯一标识
+        const uniqueRecords = new Map<string, any>()
+        historyRecords.forEach((record: any) => {
+          const uniqueKey = `${record.cluster_id}_${record.namespace}_${record.pod_name}`
+          // 保留最新的记录（假设数据已按时间排序）
+          if (!uniqueRecords.has(uniqueKey) || 
+              new Date(record.collected_at) > new Date(uniqueRecords.get(uniqueKey).collected_at)) {
+            uniqueRecords.set(uniqueKey, record)
+          }
+        })
+        
+        history.value = Array.from(uniqueRecords.values())
+        total.value = response.data.data.total || 0
+        
+        console.log(`✓ 历史数据获取成功: ${historyRecords.length} 条记录，去重后: ${history.value.length} 条`)
+        return response.data.data
+      } else {
+        history.value = []
+        total.value = 0
+        console.warn('历史数据格式异常:', response.data)
+      }
     } catch (err) {
       error.value = err instanceof Error ? err.message : '获取历史数据失败'
       console.error('获取历史数据失败:', err)
+      history.value = []
+      total.value = 0
     } finally {
       loading.value = false
     }
@@ -483,21 +525,40 @@ export function useAnalysis() {
  * 命名空间数据获取
  */
 export function useNamespaces() {
-  const namespaces = ref<NamespaceSummary[]>([])
+  const namespaces = ref<string[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  const fetchNamespaces = async (clusterName?: string) => {
+  const fetchNamespaces = async (clusterID?: number) => {
     try {
       loading.value = true
       error.value = null
-      const params = clusterName ? { cluster_name: clusterName } : {}
-      const response = await api.get<ApiResponse<NamespaceSummary[]>>('/namespaces/summary', { params })
-      namespaces.value = response.data.data
-      return response.data.data
+      
+      // 构建查询参数
+      const params: any = {}
+      if (clusterID && clusterID !== 0) {
+        params.cluster_id = clusterID
+      }
+      
+      const response = await api.get<ApiResponse<any>>('/namespaces', { params })
+      
+      console.log('命名空间API响应:', response.data)
+      
+      // 处理后端返回的数据结构
+      if (response.data && response.data.data && response.data.data.data && Array.isArray(response.data.data.data)) {
+        // 后端返回的是字符串数组
+        namespaces.value = response.data.data.data
+        console.log('✓ 命名空间获取成功:', namespaces.value.length, '个命名空间', namespaces.value)
+      } else {
+        namespaces.value = []
+        console.warn('命名空间数据格式异常:', response.data)
+      }
+      
+      return namespaces.value
     } catch (err) {
       error.value = err instanceof Error ? err.message : '获取命名空间数据失败'
       console.error('获取命名空间数据失败:', err)
+      namespaces.value = []
     } finally {
       loading.value = false
     }
@@ -541,11 +602,22 @@ export function useSchedule() {
     try {
       loading.value = true
       error.value = null
-      const response = await api.get<ApiResponse<any[]>>('/schedule/jobs')
-      jobs.value = response.data.data
+      const response = await api.get<ApiResponse<any>>('/schedule/jobs')
+      
+      console.log('调度任务API响应:', response.data)
+      
+      // 处理后端返回的数据结构：{code: 0, data: {data: [...], count: N}, msg}
+      if (response.data && response.data.data && Array.isArray(response.data.data.data)) {
+        jobs.value = response.data.data.data
+        console.log('✓ 调度任务获取成功:', jobs.value.length, '个任务')
+      } else {
+        jobs.value = []
+        console.warn('调度任务数据格式异常:', response.data)
+      }
     } catch (err) {
       error.value = err instanceof Error ? err.message : '获取调度任务失败'
       console.error('获取调度任务失败:', err)
+      jobs.value = []
     } finally {
       loading.value = false
     }
@@ -554,10 +626,21 @@ export function useSchedule() {
   const fetchSettings = async () => {
     try {
       const response = await api.get<ApiResponse<any>>('/schedule/settings')
-      settings.value = response.data.data
+      
+      console.log('调度设置API响应:', response.data)
+      
+      // 处理后端返回的数据结构
+      if (response.data && response.data.data && response.data.data.data) {
+        settings.value = response.data.data.data
+        console.log('✓ 调度设置获取成功:', settings.value)
+      } else {
+        settings.value = null
+        console.warn('调度设置数据格式异常:', response.data)
+      }
     } catch (err) {
       error.value = err instanceof Error ? err.message : '获取调度设置失败'
       console.error('获取调度设置失败:', err)
+      settings.value = null
     }
   }
 
@@ -571,6 +654,24 @@ export function useSchedule() {
       throw err
     } finally {
       loading.value = false
+    }
+  }
+
+  const updateJobSettings = async (clusterId: number, jobSettings: any) => {
+    try {
+      await api.put(`/schedule/jobs/${clusterId}/settings`, jobSettings)
+      await fetchJobs() // 刷新任务列表
+    } catch (err) {
+      throw err
+    }
+  }
+
+  const restartJob = async (clusterId: number) => {
+    try {
+      await api.post(`/schedule/jobs/${clusterId}/restart`)
+      await fetchJobs() // 刷新任务列表
+    } catch (err) {
+      throw err
     }
   }
 
@@ -592,6 +693,97 @@ export function useSchedule() {
     }
   }
 
+  const executeJobNow = async (clusterId: number) => {
+    try {
+      const response = await api.post(`/schedule/jobs/${clusterId}/execute`)
+      return response.data
+    } catch (err) {
+      throw err
+    }
+  }
+
+  // 从集群配置刷新调度任务 - 修复调度任务同步功能
+  const refreshJobsFromClusters = async () => {
+    try {
+      loading.value = true
+      error.value = null
+      const response = await api.post<ApiResponse<any>>('/schedule/jobs/refresh')
+      
+      console.log('集群任务同步API响应:', response.data)
+      
+      // 处理后端返回的数据结构：{code: 0, data: {data: [...], count: N, sync_message: "..."}, msg}
+      if (response.data && response.data.data) {
+        const responseData = response.data.data
+        if (Array.isArray(responseData.data)) {
+          jobs.value = responseData.data
+          console.log(`✓ 集群任务同步成功: ${responseData.sync_message || '任务已同步'}`)
+          console.log(`✓ 当前管理的任务数量: ${responseData.count || jobs.value.length}`)
+        }
+        return responseData
+      } else {
+        console.warn('集群任务同步响应格式异常:', response.data)
+        // 即使响应格式异常，也刷新任务列表
+        await fetchJobs()
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '同步集群任务失败'
+      console.error('同步集群任务失败:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 启动调度服务
+  const startScheduleService = async () => {
+    try {
+      loading.value = true
+      const response = await api.post<ApiResponse<any>>('/schedule/start')
+      await fetchJobs() // 刷新任务列表
+      return response.data
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '启动调度服务失败'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 停止调度服务
+  const stopScheduleService = async () => {
+    try {
+      loading.value = true
+      const response = await api.post<ApiResponse<any>>('/schedule/stop')
+      await fetchJobs() // 刷新任务列表
+      return response.data
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '停止调度服务失败'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 获取调度服务状态
+  const getScheduleStatus = async () => {
+    try {
+      const response = await api.get<ApiResponse<any>>('/schedule/status')
+      
+      console.log('调度服务状态API响应:', response.data)
+      
+      // 处理后端返回的数据结构
+      if (response.data && response.data.data && response.data.data.data) {
+        return response.data.data.data
+      } else {
+        console.warn('调度服务状态响应格式异常:', response.data)
+        return null
+      }
+    } catch (err) {
+      console.error('获取调度服务状态失败:', err)
+      throw err
+    }
+  }
+
   return {
     jobs: computed(() => jobs.value),
     settings: computed(() => settings.value),
@@ -600,8 +792,15 @@ export function useSchedule() {
     fetchJobs,
     fetchSettings,
     updateSettings,
+    updateJobSettings,
+    restartJob,
     startJob,
-    stopJob
+    stopJob,
+    executeJobNow,
+    refreshJobsFromClusters,
+    startScheduleService,
+    stopScheduleService,
+    getScheduleStatus
   }
 }
 
@@ -744,10 +943,6 @@ export function useActivityOptimization() {
   const deduplicateAlerts = async () => {
     const startTime = performance.now()
     try {
-      // 获取去重前的状态用于验证
-      const beforeStats = await getDatabaseStats()
-      const beforeDuplicates = beforeStats.duplicate_alerts || 0
-      
       const response = await api.post<ApiResponse<any>>('/alerts/deduplicate')
       const result = response.data.data
       const duration = performance.now() - startTime
@@ -766,9 +961,7 @@ export function useActivityOptimization() {
           try {
             const afterStats = await getDatabaseStats()
             const afterDuplicates = afterStats.duplicate_alerts || 0
-            if (afterDuplicates < beforeDuplicates) {
-              console.log(`✓ 去重效果验证通过: 重复告警从 ${beforeDuplicates} 减少到 ${afterDuplicates}`)
-            }
+            console.log(`✓ 去重效果验证: 当前重复告警数量为 ${afterDuplicates}`)
           } catch (err) {
             console.warn('去重效果验证失败:', err)
           }
@@ -793,9 +986,6 @@ export function useActivityOptimization() {
     }
     
     try {
-      // 获取清理前的状态
-      const beforeStats = await getDatabaseStats()
-      
       const response = await api.delete<ApiResponse<any>>('/activities/cleanup', {
         params: { 
           retention_days: retentionDays,
@@ -803,7 +993,7 @@ export function useActivityOptimization() {
         }
       })
       
-      const result = response.data.data || response.data.message
+      const result = response.data.data || response.data
       const duration = performance.now() - startTime
       
       // 性能监控

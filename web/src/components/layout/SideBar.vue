@@ -1,6 +1,7 @@
 <template>
   <aside class="fixed left-0 top-12 bottom-0 w-64 glass-card border-r border-white/10 z-40">
-    <div class="p-4">
+    <!-- 添加滚动容器：使用h-full和overflow-y-auto -->
+    <div class="h-full overflow-y-auto p-4 sidebar-scroll">
       <!-- 导航菜单 -->
       <nav class="space-y-2">
         <router-link
@@ -99,14 +100,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { 
-  LayoutDashboard, 
-  Server, 
-  Box, 
-  BarChart3, 
-  History, 
+import {
+  LayoutDashboard,
+  Server,
+  Box,
+  BarChart3,
+  History,
   Calendar,
-  Activity
+  Activity,
+  Users,
+  Shield,
+  Globe,
+  FileText
 } from 'lucide-vue-next'
 import { useSystemStore } from '../../stores/system'
 
@@ -152,6 +157,40 @@ const navigationItems = computed(() => [
     path: '/schedule',
     label: '调度管理',
     icon: Calendar,
+  },
+  {
+    name: 'Alerts',
+    path: '/alerts',
+    label: '系统告警',
+    icon: Activity,
+  },
+  // 系统管理分组
+  {
+    name: 'Users',
+    path: '/users',
+    label: '用户管理',
+    icon: Users,
+    isNew: true
+  },
+  {
+    name: 'Roles',
+    path: '/roles',
+    label: '角色管理',
+    icon: Shield,
+    isNew: true
+  },
+  {
+    name: 'Apis',
+    path: '/apis',
+    label: 'API管理',
+    icon: Globe,
+    isNew: true
+  },
+  {
+    name: 'AuditLogs',
+    path: '/audit',
+    label: '审计日志',
+    icon: FileText,
     isNew: true
   }
 ])
@@ -183,3 +222,37 @@ const healthTextColor = computed(() => {
   return 'text-danger-400'
 })
 </script>
+
+<style scoped>
+/* 自定义滚动条样式 - 提供更好的滚动体验 */
+.sidebar-scroll {
+  /* 平滑滚动 */
+  scroll-behavior: smooth;
+}
+
+/* Webkit浏览器（Chrome, Safari, Edge）滚动条样式 */
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px; /* 滚动条宽度 */
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05); /* 轨道背景 */
+  border-radius: 3px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2); /* 滑块颜色 */
+  border-radius: 3px;
+  transition: background 0.3s ease;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3); /* 悬停时滑块颜色 */
+}
+
+/* Firefox浏览器滚动条样式 */
+.sidebar-scroll {
+  scrollbar-width: thin; /* 滚动条宽度：auto | thin | none */
+  scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05); /* 滑块颜色 轨道颜色 */
+}
+</style>

@@ -55,6 +55,12 @@ type GlobalScheduleSettings struct {
 	HealthCheckInterval time.Duration `json:"health_check_interval"` // 健康检查间隔
 }
 
+// JobSettings 单个任务设置
+type JobSettings struct {
+	Interval time.Duration `json:"interval"` // 执行间隔
+	Enabled  bool          `json:"enabled"`  // 是否启用
+}
+
 // ScheduleService 定时调度服务
 type ScheduleService struct {
 	clusterService *ClusterService
@@ -297,25 +303,59 @@ func (ss *ScheduleService) GetAllJobs() []ScheduleJobInfo {
 	return jobs
 }
 
+// RefreshJobsFromClusters 从集群配置刷新调度任务 - 手动触发任务同步
+func (ss *ScheduleService) RefreshJobsFromClusters() error {
+	logger.Info("手动触发从集群配置刷新调度任务...")
+	
+	ctx := context.Background()
+	if err := ss.reloadClusterJobs(ctx); err != nil {
+		logger.Error("手动刷新集群任务失败: %v", err)
+		return fmt.Errorf("刷新集群任务失败: %v", err)
+	}
+	
+	jobCount := len(ss.jobs)
+	logger.Info("✓ 手动刷新集群任务完成，当前共管理 %d 个任务", jobCount)
+	
+	return nil
+}
+
+// StopJob 停止指定集群的调度任务
+func (ss *ScheduleService) StopJob(clusterID uint) error {
+	job, err := ss.validateAndGetJob(clusterID)
+	if err != nil {
+		return err
+	}
+
+	ss.stopSingleJob(job)
+	logger.Info("集群 %s (ID: %d) 的调度任务已停止", job.ClusterName, clusterID)
+	return nil
+}
+
+// StartJob 启动指定集群的调度任务
+func (ss *ScheduleService) StartJob(clusterID uint) error {
+	job, err := ss.validateAndGetJob(clusterID)
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	ss.startSingleJob(ctx, job)
+	logger.Info("集群 %s (ID: %d) 的调度任务已启动", job.ClusterName, clusterID)
+	return nil
+}
+
 // RestartJob 重启指定集群的调度任务
 func (ss *ScheduleService) RestartJob(clusterID uint) error {
-	ss.jobsMutex.RLock()
-	job, exists := ss.jobs[clusterID]
-	ss.jobsMutex.RUnlock()
-
-	if !exists {
-		return fmt.Errorf("集群 %d 的调度任务不存在", clusterID)
+	job, err := ss.validateAndGetJob(clusterID)
+	if err != nil {
+		return err
 	}
 
 	// 停止任务
 	ss.stopSingleJob(job)
 
 	// 重置错误状态
-	job.mutex.Lock()
-	job.ErrorCount = 0
-	job.LastError = ""
-	job.Status = "stopped"
-	job.mutex.Unlock()
+	ss.resetJobStatus(job)
 
 	// 重新启动任务
 	ctx := context.Background()
@@ -323,6 +363,59 @@ func (ss *ScheduleService) RestartJob(clusterID uint) error {
 
 	logger.Info("集群 %s (ID: %d) 的调度任务已重启", job.ClusterName, clusterID)
 	return nil
+}
+
+// resetJobStatus 重置任务状态 - 抽取重复的状态重置逻辑
+func (ss *ScheduleService) resetJobStatus(job *ScheduleJob) {
+	job.mutex.Lock()
+	job.ErrorCount = 0
+	job.LastError = ""
+	job.Status = "stopped"
+	job.mutex.Unlock()
+}
+
+// ExecuteJobNow 立即执行指定集群的调度任务
+func (ss *ScheduleService) ExecuteJobNow(clusterID uint) error {
+	job, err := ss.validateAndGetJob(clusterID)
+	if err != nil {
+		return err
+	}
+
+	// 在后台异步执行，避免阻塞API响应
+	go func() {
+		ctx := context.Background()
+		taskCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		defer cancel()
+
+		logger.Info("开始立即执行集群 %s (ID: %d) 的数据收集任务", job.ClusterName, clusterID)
+
+		// 更新最后运行时间但不更新统计数据
+		job.mutex.Lock()
+		job.LastRun = time.Now()
+		job.mutex.Unlock()
+
+		err := ss.performDataCollection(taskCtx, job)
+		if err != nil {
+			logger.Error("立即执行任务失败: %v", err)
+		} else {
+			logger.Info("立即执行任务成功完成")
+		}
+	}()
+
+	logger.Info("集群 %s (ID: %d) 的立即执行任务已触发", job.ClusterName, clusterID)
+	return nil
+}
+
+// validateAndGetJob 验证并获取调度任务 - 消除重复的验证逻辑
+func (ss *ScheduleService) validateAndGetJob(clusterID uint) (*ScheduleJob, error) {
+	ss.jobsMutex.RLock()
+	job, exists := ss.jobs[clusterID]
+	ss.jobsMutex.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("集群 %d 的调度任务不存在", clusterID)
+	}
+	return job, nil
 }
 
 // UpdateSettings 更新全局调度设置
@@ -349,6 +442,50 @@ func (ss *ScheduleService) UpdateSettings(newSettings *GlobalScheduleSettings) e
 
 	logger.Info("全局调度设置已更新: enabled=%v, default_interval=%v, persistence=%v",
 		newSettings.Enabled, newSettings.DefaultInterval, newSettings.EnablePersistence)
+
+	return nil
+}
+
+// UpdateJobSettings 更新单个任务的设置
+func (ss *ScheduleService) UpdateJobSettings(clusterID uint, settings *JobSettings) error {
+	job, err := ss.validateAndGetJob(clusterID)
+	if err != nil {
+		return err
+	}
+
+	// 验证设置
+	if settings.Interval <= 0 {
+		return fmt.Errorf("任务间隔必须大于0")
+	}
+
+	// 如果间隔有变化，需要重启任务
+	if job.Interval != settings.Interval {
+		wasRunning := job.Status == "running"
+
+		// 停止任务
+		ss.stopSingleJob(job)
+
+		// 更新间隔
+		job.mutex.Lock()
+		job.Interval = settings.Interval
+		job.mutex.Unlock()
+
+		// 如果原来是运行状态且新设置为启用，则重新启动
+		if wasRunning && settings.Enabled {
+			ctx := context.Background()
+			ss.startSingleJob(ctx, job)
+		}
+
+		logger.Info("集群 %s (ID: %d) 任务间隔已更新为: %v", job.ClusterName, clusterID, settings.Interval)
+	}
+
+	// 处理启用/禁用状态
+	if settings.Enabled && job.Status == "stopped" {
+		ctx := context.Background()
+		ss.startSingleJob(ctx, job)
+	} else if !settings.Enabled && job.Status == "running" {
+		ss.stopSingleJob(job)
+	}
 
 	return nil
 }
