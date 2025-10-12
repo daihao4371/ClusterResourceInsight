@@ -1,9 +1,9 @@
 <template>
-  <div class="h-full flex flex-col bg-gray-50">
+  <div class="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
     <!-- 页面头部 -->
-    <div class="bg-white border-b border-gray-200 px-6 py-4">
+    <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
       <div class="flex items-center justify-between">
-        <h1 class="text-2xl font-bold text-gray-900">用户管理</h1>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">用户管理</h1>
         <button @click="showCreateDialog" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
           <Plus class="w-4 h-4 inline-block mr-1" />
           新增用户
@@ -12,11 +12,11 @@
     </div>
 
     <!-- 搜索栏 -->
-    <div class="bg-white border-b border-gray-200 px-6 py-3">
+    <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
       <div class="flex gap-3">
         <input v-model="keyword" @input="handleSearch" type="text" placeholder="搜索用户名、真实姓名或邮箱"
-          class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500" />
-        <select v-model="statusFilter" @change="handleSearch" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+          class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white" />
+        <select v-model="statusFilter" @change="handleSearch" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white">
           <option value="">所有状态</option>
           <option value="active">正常</option>
           <option value="inactive">已禁用</option>
@@ -29,38 +29,38 @@
     <div class="flex-1 overflow-auto p-6">
       <div v-if="loading" class="text-center py-12">
         <Loader2 class="w-8 h-8 animate-spin text-blue-600 mx-auto" />
-        <p class="mt-2 text-gray-500">加载中...</p>
+        <p class="mt-2 text-gray-500 dark:text-gray-400">加载中...</p>
       </div>
 
       <div v-else-if="users.length === 0" class="text-center py-12">
         <UserX class="w-16 h-16 text-gray-400 mx-auto" />
-        <p class="mt-4 text-gray-500">暂无用户数据</p>
+        <p class="mt-4 text-gray-500 dark:text-gray-400">暂无用户数据</p>
       </div>
 
-      <div v-else class="bg-white rounded-lg shadow overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
+      <div v-else class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead class="bg-gray-50 dark:bg-gray-900">
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">用户名</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">真实姓名</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">邮箱</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">角色</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">最后登录</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">操作</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">用户名</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">真实姓名</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">邮箱</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">角色</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">状态</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">最后登录</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">操作</th>
             </tr>
           </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            <tr v-for="user in users" :key="user.id" class="hover:bg-gray-50">
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ user.username }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ user.real_name || '-' }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ user.email }}</td>
+          <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            <tr v-for="user in users" :key="user.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{{ user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{{ user.real_name || '-' }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{{ user.email }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm">
                 <div class="flex flex-wrap gap-1">
-                  <span v-for="role in user.roles" :key="role.id" class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                  <span v-for="role in user.roles" :key="role.id" class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded">
                     {{ role.role_name }}
                   </span>
-                  <span v-if="!user.roles || user.roles.length === 0" class="text-gray-400">-</span>
+                  <span v-if="!user.roles || user.roles.length === 0" class="text-gray-400 dark:text-gray-500">-</span>
                 </div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
@@ -68,30 +68,30 @@
                   {{ getStatusText(user.status) }}
                 </span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                 {{ user.last_login_at ? formatDate(user.last_login_at) : '从未登录' }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button @click="handleEdit(user)" class="text-blue-600 hover:text-blue-900 mr-3">编辑</button>
-                <button @click="handleResetPassword(user)" class="text-orange-600 hover:text-orange-900 mr-3">重置密码</button>
-                <button @click="handleDelete(user)" class="text-red-600 hover:text-red-900">删除</button>
+                <button @click="handleEdit(user)" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3">编辑</button>
+                <button @click="handleResetPassword(user)" class="text-orange-600 dark:text-orange-400 hover:text-orange-900 dark:hover:text-orange-300 mr-3">重置密码</button>
+                <button @click="handleDelete(user)" class="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300">删除</button>
               </td>
             </tr>
           </tbody>
         </table>
 
         <!-- 分页 -->
-        <div class="bg-gray-50 px-6 py-3 flex items-center justify-between border-t border-gray-200">
-          <div class="text-sm text-gray-500">
+        <div class="bg-gray-50 dark:bg-gray-900 px-6 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-700">
+          <div class="text-sm text-gray-500 dark:text-gray-400">
             共 {{ total }} 条记录，第 {{ currentPage }} / {{ totalPages }} 页
           </div>
           <div class="flex gap-2">
             <button @click="handlePageChange(currentPage - 1)" :disabled="currentPage === 1"
-              class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
+              class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed dark:text-gray-300">
               上一页
             </button>
             <button @click="handlePageChange(currentPage + 1)" :disabled="currentPage === totalPages"
-              class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
+              class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed dark:text-gray-300">
               下一页
             </button>
           </div>
@@ -101,57 +101,57 @@
 
     <!-- 创建/编辑用户弹窗 -->
     <div v-if="showDialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-        <div class="px-6 py-4 border-b">
-          <h2 class="text-xl font-bold">{{ editingUser ? '编辑用户' : '新增用户' }}</h2>
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 class="text-xl font-bold text-gray-900 dark:text-white">{{ editingUser ? '编辑用户' : '新增用户' }}</h2>
         </div>
         <div class="px-6 py-4 space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">用户名 *</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">用户名 *</label>
             <input v-model="formData.username" type="text" :disabled="!!editingUser"
-              class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" />
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900" />
           </div>
           <div v-if="!editingUser">
-            <label class="block text-sm font-medium text-gray-700 mb-1">密码 *</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">密码 *</label>
             <input v-model="formData.password" type="password"
-              class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" />
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">邮箱 *</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">邮箱 *</label>
             <input v-model="formData.email" type="email"
-              class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" />
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">真实姓名</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">真实姓名</label>
             <input v-model="formData.real_name" type="text"
-              class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" />
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">手机号</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">手机号</label>
             <input v-model="formData.phone" type="tel"
-              class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" />
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">角色</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">角色</label>
             <select v-model="formData.role_ids" multiple
-              class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white">
               <option v-for="role in availableRoles" :key="role.id" :value="role.id">
                 {{ role.role_name }}
               </option>
             </select>
           </div>
           <div v-if="editingUser">
-            <label class="block text-sm font-medium text-gray-700 mb-1">状态</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">状态</label>
             <select v-model="formData.status"
-              class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white">
               <option value="active">正常</option>
               <option value="inactive">禁用</option>
               <option value="locked">锁定</option>
             </select>
           </div>
         </div>
-        <div class="px-6 py-4 border-t flex justify-end gap-2">
-          <button @click="closeDialog" class="px-4 py-2 border rounded-lg hover:bg-gray-50">取消</button>
+        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+          <button @click="closeDialog" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-300">取消</button>
           <button @click="handleSubmit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
             {{ editingUser ? '保存' : '创建' }}
           </button>
@@ -332,9 +332,9 @@ const formatDate = (date: string) => {
 // 状态样式
 const getStatusClass = (status: string) => {
   const classes = {
-    active: 'bg-green-100 text-green-800',
-    inactive: 'bg-gray-100 text-gray-800',
-    locked: 'bg-red-100 text-red-800'
+    active: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200',
+    inactive: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
+    locked: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
   }
   return classes[status as keyof typeof classes] || classes.inactive
 }

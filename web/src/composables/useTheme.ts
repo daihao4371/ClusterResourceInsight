@@ -36,7 +36,19 @@ export function useTheme() {
   // 应用主题到DOM
   const applyTheme = (theme: ThemeMode) => {
     if (typeof document !== 'undefined') {
+      // 设置data-theme属性（用于CSS变量）
       document.documentElement.setAttribute('data-theme', theme)
+
+      // 根据实际主题添加或移除dark类（用于Tailwind深色模式）
+      const actualTheme = theme === 'auto'
+        ? (systemPrefersDark.value ? 'dark' : 'light')
+        : theme
+
+      if (actualTheme === 'dark') {
+        document.documentElement.classList.add('dark')
+      } else {
+        document.documentElement.classList.remove('dark')
+      }
     }
   }
 

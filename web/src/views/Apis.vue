@@ -1,9 +1,9 @@
 <template>
-  <div class="h-full flex flex-col bg-gray-50">
+  <div class="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
     <!-- 页面头部 -->
-    <div class="bg-white border-b border-gray-200 px-6 py-4">
+    <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
       <div class="flex items-center justify-between">
-        <h1 class="text-2xl font-bold text-gray-900">API管理</h1>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">API管理</h1>
         <button @click="showCreateDialog" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
           <Plus class="w-4 h-4 inline-block mr-1" />
           新增API
@@ -12,12 +12,12 @@
     </div>
 
     <!-- 搜索栏和过滤 -->
-    <div class="bg-white border-b border-gray-200 px-6 py-3">
+    <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
       <div class="flex gap-3">
         <input v-model="keyword" @input="handleSearch" type="text" placeholder="搜索API路径或权限标识"
-          class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500" />
+          class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white" />
         <select v-model="methodFilter" @change="handleSearch"
-          class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+          class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white">
           <option value="">所有方法</option>
           <option value="GET">GET</option>
           <option value="POST">POST</option>
@@ -26,14 +26,14 @@
           <option value="PATCH">PATCH</option>
         </select>
         <select v-model="groupFilter" @change="handleSearch"
-          class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+          class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white">
           <option value="">所有分组</option>
           <option v-for="group in apiGroups" :key="group" :value="group">
             {{ group }}
           </option>
         </select>
         <select v-model="statusFilter" @change="handleSearch"
-          class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+          class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white">
           <option value="">所有状态</option>
           <option value="true">公开接口</option>
           <option value="false">需授权</option>
@@ -45,79 +45,79 @@
     <div class="flex-1 overflow-auto p-6">
       <div v-if="loading" class="text-center py-12">
         <Loader2 class="w-8 h-8 animate-spin text-blue-600 mx-auto" />
-        <p class="mt-2 text-gray-500">加载中...</p>
+        <p class="mt-2 text-gray-500 dark:text-gray-400">加载中...</p>
       </div>
 
       <div v-else-if="apis.length === 0" class="text-center py-12">
         <Globe class="w-16 h-16 text-gray-400 mx-auto" />
-        <p class="mt-4 text-gray-500">暂无API数据</p>
+        <p class="mt-4 text-gray-500 dark:text-gray-400">暂无API数据</p>
       </div>
 
-      <div v-else class="bg-white rounded-lg shadow overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
+      <div v-else class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead class="bg-gray-50 dark:bg-gray-900">
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">请求方法</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">API路径</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">分组</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">权限标识</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">描述</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">创建时间</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">操作</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">请求方法</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">API路径</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">分组</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">权限标识</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">描述</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">状态</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">创建时间</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">操作</th>
             </tr>
           </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            <tr v-for="api in apis" :key="api.id" class="hover:bg-gray-50">
+          <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            <tr v-for="api in apis" :key="api.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
               <td class="px-6 py-4 whitespace-nowrap">
                 <span :class="getMethodClass(api.method)" class="px-2 py-1 text-xs font-semibold rounded">
                   {{ api.method }}
                 </span>
               </td>
-              <td class="px-6 py-4 text-sm font-mono text-gray-900">{{ api.path }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                <span class="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs">
+              <td class="px-6 py-4 text-sm font-mono text-gray-900 dark:text-white">{{ api.path }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                <span class="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded text-xs">
                   {{ api.group || '-' }}
                 </span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm">
-                <code v-if="api.permission" class="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs">
+                <code v-if="api.permission" class="px-2 py-1 bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-200 rounded text-xs">
                   {{ api.permission }}
                 </code>
-                <span v-else class="text-gray-400">-</span>
+                <span v-else class="text-gray-400 dark:text-gray-500">-</span>
               </td>
-              <td class="px-6 py-4 text-sm text-gray-700">{{ api.description || '-' }}</td>
+              <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">{{ api.description || '-' }}</td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <span v-if="api.is_public" class="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                <span v-if="api.is_public" class="px-2 py-1 text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full">
                   公开
                 </span>
-                <span v-else class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
+                <span v-else class="px-2 py-1 text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded-full">
                   需授权
                 </span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                 {{ api.created_at ? formatDate(api.created_at) : '-' }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button @click="handleEdit(api)" class="text-blue-600 hover:text-blue-900 mr-3">编辑</button>
-                <button @click="handleDelete(api)" class="text-red-600 hover:text-red-900">删除</button>
+                <button @click="handleEdit(api)" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3">编辑</button>
+                <button @click="handleDelete(api)" class="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300">删除</button>
               </td>
             </tr>
           </tbody>
         </table>
 
         <!-- 分页 -->
-        <div class="bg-gray-50 px-6 py-3 flex items-center justify-between border-t border-gray-200">
-          <div class="text-sm text-gray-500">
+        <div class="bg-gray-50 dark:bg-gray-900 px-6 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-700">
+          <div class="text-sm text-gray-500 dark:text-gray-400">
             共 {{ total }} 条记录，第 {{ currentPage }} / {{ totalPages }} 页
           </div>
           <div class="flex gap-2">
             <button @click="handlePageChange(currentPage - 1)" :disabled="currentPage === 1"
-              class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
+              class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed dark:text-gray-300">
               上一页
             </button>
             <button @click="handlePageChange(currentPage + 1)" :disabled="currentPage === totalPages"
-              class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
+              class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed dark:text-gray-300">
               下一页
             </button>
           </div>
@@ -127,16 +127,16 @@
 
     <!-- 创建/编辑API弹窗 -->
     <div v-if="showDialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
-        <div class="px-6 py-4 border-b">
-          <h2 class="text-xl font-bold">{{ editingApi ? '编辑API' : '新增API' }}</h2>
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl mx-4">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 class="text-xl font-bold text-gray-900 dark:text-white">{{ editingApi ? '编辑API' : '新增API' }}</h2>
         </div>
         <div class="px-6 py-4 space-y-4">
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">请求方法 *</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">请求方法 *</label>
               <select v-model="formData.method"
-                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white">
                 <option value="GET">GET</option>
                 <option value="POST">POST</option>
                 <option value="PUT">PUT</option>
@@ -145,38 +145,38 @@
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">API分组</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API分组</label>
               <input v-model="formData.group" type="text" placeholder="例如: users, clusters"
-                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" />
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white" />
             </div>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">API路径 *</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API路径 *</label>
             <input v-model="formData.path" type="text" placeholder="/api/v1/users"
-              class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 font-mono text-sm" />
-            <p class="text-xs text-gray-500 mt-1">路径支持动态参数，例如: /users/:id</p>
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm" />
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">路径支持动态参数，例如: /users/:id</p>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">权限标识</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">权限标识</label>
             <input v-model="formData.permission" type="text" placeholder="user:view"
-              class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" />
-            <p class="text-xs text-gray-500 mt-1">用于权限校验的标识符，格式: 资源:操作</p>
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white" />
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">用于权限校验的标识符，格式: 资源:操作</p>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">描述</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">描述</label>
             <textarea v-model="formData.description" rows="2" placeholder="简要描述该API的功能"
-              class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500"></textarea>
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white"></textarea>
           </div>
           <div class="flex items-center">
             <input v-model="formData.is_public" type="checkbox" id="is-public"
               class="mr-2 h-4 w-4 text-blue-600 rounded" />
-            <label for="is-public" class="text-sm text-gray-700">
+            <label for="is-public" class="text-sm text-gray-700 dark:text-gray-300">
               公开接口（无需鉴权即可访问）
             </label>
           </div>
         </div>
-        <div class="px-6 py-4 border-t flex justify-end gap-2">
-          <button @click="closeDialog" class="px-4 py-2 border rounded-lg hover:bg-gray-50">取消</button>
+        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+          <button @click="closeDialog" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-300">取消</button>
           <button @click="handleSubmit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
             {{ editingApi ? '保存' : '创建' }}
           </button>
@@ -359,13 +359,13 @@ const formatDate = (date: string) => {
 // HTTP方法样式
 const getMethodClass = (method: string) => {
   const classes = {
-    GET: 'bg-blue-100 text-blue-800',
-    POST: 'bg-green-100 text-green-800',
-    PUT: 'bg-yellow-100 text-yellow-800',
-    DELETE: 'bg-red-100 text-red-800',
-    PATCH: 'bg-purple-100 text-purple-800'
+    GET: 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200',
+    POST: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200',
+    PUT: 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200',
+    DELETE: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200',
+    PATCH: 'bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200'
   }
-  return classes[method as keyof typeof classes] || 'bg-gray-100 text-gray-800'
+  return classes[method as keyof typeof classes] || 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
 }
 
 // 初始化
