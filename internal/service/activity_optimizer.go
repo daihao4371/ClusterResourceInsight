@@ -425,7 +425,7 @@ func (o *ActivityOptimizer) createAggregationRecord(agg ActivityAggregation) err
 		Message:   message,
 		Source:    "aggregator",
 		Details:   string(detailsJSON),
-		CreatedAt: time.Now(),
+		// CreatedAt 由 GORM 自动管理（通过嵌入的 BaseModelWithCreatedAt）
 	}
 
 	return o.db.Create(activity).Error
