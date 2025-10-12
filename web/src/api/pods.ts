@@ -194,13 +194,22 @@ class HttpClient {
     }
 
     const fullUrl = `${this.baseURL}${url}${searchParams.toString() ? '?' + searchParams.toString() : ''}`
-    
+
+    // 从localStorage读取token并添加到请求头（与axios interceptor保持一致）
+    const token = localStorage.getItem('token')
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+
+    // 如果有token且不是登录接口，添加Authorization头
+    if (token && !url.includes('/auth/login')) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
     try {
       const response = await fetch(fullUrl, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
       })
 
       if (!response.ok) {
@@ -216,12 +225,21 @@ class HttpClient {
   }
 
   async post<T>(url: string, data?: any): Promise<T> {
+    // 从localStorage读取token并添加到请求头（与axios interceptor保持一致）
+    const token = localStorage.getItem('token')
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+
+    // 如果有token且不是登录接口，添加Authorization头
+    if (token && !url.includes('/auth/login')) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
     try {
       const response = await fetch(`${this.baseURL}${url}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: data ? JSON.stringify(data) : undefined,
       })
 
