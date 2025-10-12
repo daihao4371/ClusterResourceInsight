@@ -154,7 +154,7 @@ func (d *AlertDeduplicator) SetSuppressionDuration(duration time.Duration) {
 func (d *AlertDeduplicator) PrepareDeduplicatedAlert(clusterID uint, level, title, message string) *models.AlertHistory {
 	fingerprint := d.GenerateFingerprint(clusterID, level, title)
 	now := time.Now()
-	
+
 	alert := &models.AlertHistory{
 		ClusterID:        clusterID,
 		AlertLevel:       level,
@@ -166,9 +166,8 @@ func (d *AlertDeduplicator) PrepareDeduplicatedAlert(clusterID uint, level, titl
 		FirstOccurredAt: now,
 		LastOccurredAt:  now,
 		TriggeredAt:     now,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		// CreatedAt 和 UpdatedAt 由 GORM 自动管理（通过嵌入的 BaseModelWithoutSoftDelete）
 	}
-	
+
 	return alert
 }

@@ -58,7 +58,7 @@ func (s *ActivityService) RecordActivity(activityType, title, message, source st
 		Title:     title,
 		Message:   message,
 		Source:    source,
-		CreatedAt: time.Now(),
+		// CreatedAt 由 GORM 自动管理（通过嵌入的 BaseModelWithCreatedAt）
 	}
 
 	// 检查是否应该记录此活动
@@ -197,8 +197,7 @@ func (s *ActivityService) CreateSampleAlert(clusterID uint, level, title, messag
 		Message:     message,
 		Status:      "active",
 		TriggeredAt: time.Now(),
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		// CreatedAt 和 UpdatedAt 由 GORM 自动管理（通过嵌入的 BaseModelWithoutSoftDelete）
 	}
 
 	if err := s.db.Create(alert).Error; err != nil {
@@ -531,8 +530,7 @@ func (s *ActivityService) generateRealAlerts(clusterService *ClusterService) err
 				Message:     fmt.Sprintf("集群 %s 无法连接，状态: %s", cluster.ClusterName, cluster.Status),
 				Status:      "active",
 				TriggeredAt: time.Now(),
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
+				// CreatedAt 和 UpdatedAt 由 GORM 自动管理（通过嵌入的 BaseModelWithoutSoftDelete）
 			}
 
 			if err := s.db.Create(alert).Error; err != nil {
@@ -581,8 +579,7 @@ func (s *ActivityService) generateResourceAlerts(cluster models.ClusterConfig) {
 				Message:     alertData.Message,
 				Status:      alertData.Status,
 				TriggeredAt: currentTime,
-				CreatedAt:   currentTime,
-				UpdatedAt:   currentTime,
+				// CreatedAt 和 UpdatedAt 由 GORM 自动管理（通过嵌入的 BaseModelWithoutSoftDelete）
 			}
 
 			if err := s.db.Create(alert).Error; err != nil {

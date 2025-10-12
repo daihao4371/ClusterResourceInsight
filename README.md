@@ -67,7 +67,25 @@ cp config.toml.example config.toml
 # 编辑 config.toml 中的数据库配置
 ```
 
-### 3. 运行应用
+### 3. 初始化数据库
+
+```bash
+# 执行数据库迁移（自动创建表结构）
+go run cmd/main.go --migrate
+
+# 初始化系统API数据（可选，用于API管理功能）
+go run scripts/init_apis.go
+```
+
+该脚本会初始化106个系统API端点，包括：
+- 认证相关API（登录、登出等）
+- 资源监控API（Pod、命名空间、统计等）
+- 集群管理API（创建、更新、删除等）
+- 用户和角色管理API
+- 审计日志API
+- 调度和历史数据API
+
+### 4. 运行应用
 
 ```bash
 # 构建并运行
@@ -78,11 +96,12 @@ go build -o bin/cluster-resource-insight cmd/main.go
 ./bin/cluster-resource-insight
 ```
 
-### 4. 访问系统
+### 5. 访问系统
 
 - **Web界面**: http://localhost:9999
-- **API文档**: http://localhost:9999/api/v1/health
+- **API文档**: http://localhost:9999/api/health
 - **集群管理**: http://localhost:9999/clusters
+- **默认账号**: admin / admin123（首次登录后请立即修改密码）
 
 ## 📖 使用指南
 
@@ -261,7 +280,10 @@ ClusterResourceInsight/
 │   └── main.go            # 主程序入口
 ├── internal/              # 内部核心代码
 │   ├── api/              # API 路由和处理器
-│   │   └── handlers.go   # HTTP 处理器
+│   │   ├── handlers.go           # HTTP 处理器
+│   │   ├── api_handlers.go       # API管理处理器
+│   │   ├── user_handlers.go      # 用户管理处理器
+│   │   └── audit_handlers.go     # 审计日志处理器
 │   ├── collector/        # 数据收集器
 │   │   ├── resource_collector.go      # 资源数据收集
 │   │   └── multi_cluster_collector.go # 多集群数据收集
@@ -269,23 +291,34 @@ ClusterResourceInsight/
 │   │   ├── cluster_service.go        # 集群管理服务
 │   │   ├── activity_service.go       # 活动和告警服务
 │   │   ├── history_service.go        # 历史数据服务
-│   │   └── schedule_service.go       # 调度管理服务
+│   │   ├── schedule_service.go       # 调度管理服务
+│   │   ├── user_service.go           # 用户管理服务
+│   │   ├── role_service.go           # 角色管理服务
+│   │   ├── api_service.go            # API管理服务
+│   │   └── audit_service.go          # 审计日志服务
 │   ├── models/           # 数据模型
 │   │   └── models.go     # 数据库模型定义
 │   ├── database/         # 数据库管理
 │   │   └── database.go   # 数据库连接和初始化
+│   ├── middleware/       # 中间件
+│   │   ├── jwt.go        # JWT认证中间件
+│   │   ├── cors.go       # CORS中间件
+│   │   └── audit.go      # 审计日志中间件
 │   ├── config/           # 配置管理
 │   │   └── config.go     # 配置文件解析
 │   ├── logger/           # 日志系统
 │   │   └── logger.go     # 日志配置
 │   └── response/         # 响应工具
 │       └── response.go   # 统一响应格式
+├── scripts/               # 工具脚本
+│   └── init_apis.go      # API数据初始化脚本
 ├── web/                   # 前端代码 (Vue.js)
 │   ├── src/
 │   │   ├── components/   # Vue 组件
 │   │   ├── views/        # 页面视图
 │   │   ├── stores/       # 状态管理 (Pinia)
 │   │   ├── types/        # TypeScript 类型定义
+│   │   ├── api/          # API接口定义
 │   │   └── utils/        # 工具函数
 │   ├── public/           # 静态资源
 │   └── dist/             # 构建输出
